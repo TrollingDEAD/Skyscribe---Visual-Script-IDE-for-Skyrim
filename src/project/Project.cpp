@@ -57,7 +57,7 @@ bool Project::New(const std::string& name, const std::string& parent_dir) {
 bool Project::Open(const std::string& path) {
     // Tier 1: exact .skyscribe file
     std::string resolved;
-    if (fs::is_regular_file(path) && path.ends_with(".skyscribe")) {
+    if (fs::is_regular_file(path) && fs::path(path).extension() == ".skyscribe") {
         resolved = path;
     } else if (fs::is_directory(path)) {
         // Tier 2: scan the directory for a .skyscribe file

@@ -1,9 +1,9 @@
-#include <catch2/catch_test_macros.hpp>
+﻿#include <catch2/catch_test_macros.hpp>
 #include "compiler/OutputParser.h"
 
 using namespace compiler;
 
-TEST_CASE("OutputParser — error line", "[parser]") {
+TEST_CASE("OutputParser - error line", "[parser]") {
     const std::string raw =
         R"(C:\CK\Data\Scripts\Source\HelloWorld.psc(12,5): error: unknown identifier 'Foo')";
     CompilerLine line = OutputParser::Parse(raw);
@@ -14,7 +14,7 @@ TEST_CASE("OutputParser — error line", "[parser]") {
     REQUIRE(line.text        == raw);
 }
 
-TEST_CASE("OutputParser — warning line", "[parser]") {
+TEST_CASE("OutputParser - warning line", "[parser]") {
     const std::string raw =
         R"(C:\CK\Data\Scripts\Source\MyScript.psc(3,1): warning: variable 'x' is unused)";
     CompilerLine line = OutputParser::Parse(raw);
@@ -24,7 +24,7 @@ TEST_CASE("OutputParser — warning line", "[parser]") {
     REQUIRE(line.line_number == 3);
 }
 
-TEST_CASE("OutputParser — success line", "[parser]") {
+TEST_CASE("OutputParser - success line", "[parser]") {
     const std::string raw = "Assembly of HelloWorld succeeded";
     CompilerLine line = OutputParser::Parse(raw);
 
@@ -33,7 +33,7 @@ TEST_CASE("OutputParser — success line", "[parser]") {
     REQUIRE(line.line_number == 0);
 }
 
-TEST_CASE("OutputParser — info / unknown line", "[parser]") {
+TEST_CASE("OutputParser - info / unknown line", "[parser]") {
     const std::string raw = "Starting Papyrus Compiler v1.9";
     CompilerLine line = OutputParser::Parse(raw);
 
@@ -41,12 +41,12 @@ TEST_CASE("OutputParser — info / unknown line", "[parser]") {
     REQUIRE(line.text == raw);
 }
 
-TEST_CASE("OutputParser — empty line is Info", "[parser]") {
+TEST_CASE("OutputParser - empty line is Info", "[parser]") {
     CompilerLine line = OutputParser::Parse("");
     REQUIRE(line.kind == LineKind::Info);
 }
 
-TEST_CASE("OutputParser — case-insensitive error keyword", "[parser]") {
+TEST_CASE("OutputParser - case-insensitive error keyword", "[parser]") {
     const std::string raw =
         R"(Script.psc(7,2): ERROR: something bad happened)";
     CompilerLine line = OutputParser::Parse(raw);

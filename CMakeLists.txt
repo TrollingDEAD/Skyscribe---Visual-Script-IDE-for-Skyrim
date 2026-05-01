@@ -46,6 +46,7 @@ target_link_libraries(Skyscribe PRIVATE
     d3dcompiler
     shell32
     ole32
+    comdlg32
 )
 
 target_compile_definitions(Skyscribe PRIVATE
@@ -56,4 +57,5 @@ target_compile_definitions(Skyscribe PRIVATE
 )
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+enable_testing()
 add_subdirectory(tests)

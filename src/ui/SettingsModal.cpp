@@ -11,9 +11,8 @@
 #include <shlobj.h>
 
 #include <filesystem>
+#include <functional>
 #include <algorithm>
-
-#pragma comment(lib, "comdlg32.lib")
 
 namespace ui {
 

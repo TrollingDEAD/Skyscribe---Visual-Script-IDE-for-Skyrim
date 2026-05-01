@@ -113,7 +113,7 @@ std::vector<std::string> Settings::ResolvedImportDirs() const {
     namespace fs = std::filesystem;
     std::vector<std::string> dirs;
 
-    // Built-in: Data\Scripts\Source\
+    // Built-in: Data\Scripts\Source
     if (!ck_data_path.empty()) {
         const std::string builtin = ck_data_path + "\\Scripts\\Source";
         if (fs::is_directory(builtin))
