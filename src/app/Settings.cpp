@@ -138,7 +138,8 @@ std::vector<std::string> Settings::ResolvedImportDirs() const {
             // Deduplicate
             bool found = false;
             for (const auto& existing : dirs) {
-                if (fs::equivalent(existing, d, std::error_code{})) {
+                std::error_code eq_ec;
+                if (fs::equivalent(existing, d, eq_ec)) {
                     found = true; break;
                 }
             }

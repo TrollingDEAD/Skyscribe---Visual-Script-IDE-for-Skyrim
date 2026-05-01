@@ -1,5 +1,6 @@
 #include "project/Project.h"
 #include "app/Logger.h"
+#include "graph/GraphSerializer.h"
 
 #include <nlohmann/json.hpp>
 #include <filesystem>
@@ -42,6 +43,11 @@ bool Project::New(const std::string& name, const std::string& parent_dir) {
     is_open_                 = true;
     dirty_                   = false;
 
+    // Create a default blank script.
+    scripts_.clear();
+    active_script_idx_ = -1;
+    AddScript("NewScript");
+
     if (!WriteFile(FilePath())) {
         ForceClose();
         return false;
@@ -61,7 +67,8 @@ bool Project::Open(const std::string& path) {
         resolved = path;
     } else if (fs::is_directory(path)) {
         // Tier 2: scan the directory for a .skyscribe file
-        for (const auto& entry : fs::directory_iterator(path, std::error_code{})) {
+        std::error_code dir_ec;
+        for (const auto& entry : fs::directory_iterator(path, dir_ec)) {
             if (entry.path().extension() == ".skyscribe") {
                 resolved = entry.path().string();
                 break;
@@ -82,6 +89,13 @@ bool Project::Open(const std::string& path) {
         meta_.root_dir          = m.value("root_dir",           std::string{});
         meta_.created_at        = m.value("created_at",         std::string{});
         meta_.skyscribe_version = m.value("skyscribe_version",  std::string{});
+
+        // Load scripts
+        scripts_.clear();
+        for (const auto& js : j.value("scripts", nlohmann::json::array()))
+            scripts_.push_back(graph::GraphSerializer::Load(js));
+        if (scripts_.empty()) AddScript("NewScript");
+        active_script_idx_ = 0;
     } catch (const std::exception& e) {
         LOG_ERR(std::string("Project::Open: parse failed: ") + e.what());
         return false;
@@ -126,9 +140,11 @@ bool Project::Close() {
 }
 
 void Project::ForceClose() {
-    meta_    = {};
-    is_open_ = false;
-    dirty_   = false;
+    meta_              = {};
+    scripts_.clear();
+    active_script_idx_ = -1;
+    is_open_           = false;
+    dirty_             = false;
 }
 
 // ── FilePath ──────────────────────────────────────────────────────────────────
@@ -179,8 +195,12 @@ bool Project::WriteFile(const std::string& path) const {
     j["meta"]["root_dir"]           = meta_.root_dir;
     j["meta"]["created_at"]         = meta_.created_at;
     j["meta"]["skyscribe_version"]  = meta_.skyscribe_version;
-    j["graphs"]                     = json::array();
-    j["settings_override"]          = json::object();
+
+    auto& jscripts = j["scripts"] = json::array();
+    for (const auto& s : scripts_)
+        jscripts.push_back(graph::GraphSerializer::Save(s));
+
+    j["settings_override"] = json::object();
 
     const std::string tmp = path + ".tmp";
     try {
@@ -193,6 +213,39 @@ bool Project::WriteFile(const std::string& path) const {
         fs::remove(tmp, ec);
         return false;
     }
+}
+
+// ── Script management ─────────────────────────────────────────────────────────
+
+graph::ScriptGraph& Project::AddScript(const std::string& name,
+                                       const std::string& extends) {
+    graph::ScriptGraph s;
+    s.script_name = name;
+    s.extends     = extends;
+    scripts_.push_back(std::move(s));
+    if (active_script_idx_ < 0)
+        active_script_idx_ = 0;
+    dirty_ = true;
+    return scripts_.back();
+}
+
+void Project::RemoveScript(size_t index) {
+    if (index >= scripts_.size()) return;
+    scripts_.erase(scripts_.begin() + static_cast<ptrdiff_t>(index));
+    if (active_script_idx_ >= static_cast<int>(scripts_.size()))
+        active_script_idx_ = static_cast<int>(scripts_.size()) - 1;
+    dirty_ = true;
+}
+
+void Project::RenameScript(size_t index, const std::string& new_name) {
+    if (index >= scripts_.size()) return;
+    scripts_[index].script_name = new_name;
+    dirty_ = true;
+}
+
+void Project::SetActiveScript(int index) {
+    if (index >= 0 && index < static_cast<int>(scripts_.size()))
+        active_script_idx_ = index;
 }
 
 std::string Project::NowISO8601() {

@@ -24,7 +24,7 @@ public:
     std::vector<const NodeDefinition*> ByCategory(NodeCategory category) const;
 
     // Total number of registered nodes.
-    size_t Count() const { return all_.size(); }
+    size_t Count() const { return map_.size(); }
 
 private:
     NodeRegistry() = default;

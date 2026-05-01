@@ -4,14 +4,15 @@
         {
             "name": "base",
             "hidden": true,
-            "generator": "Visual Studio 17 2022",
-            "architecture": "x64",
+            "generator": "Ninja",
             "cacheVariables": {
                 "CMAKE_TOOLCHAIN_FILE": {
                     "value": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
                     "type": "FILEPATH"
                 },
-                "VCPKG_TARGET_TRIPLET": "x64-windows"
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-static",
+                "CMAKE_C_COMPILER": "gcc",
+                "CMAKE_CXX_COMPILER": "g++"
             }
         },
         {
@@ -36,13 +37,11 @@
     "buildPresets": [
         {
             "name": "release",
-            "configurePreset": "release",
-            "configuration": "Release"
+            "configurePreset": "release"
         },
         {
             "name": "debug",
-            "configurePreset": "debug",
-            "configuration": "Debug"
+            "configurePreset": "debug"
         }
     ]
 }

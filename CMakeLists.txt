@@ -33,7 +33,7 @@ target_include_directories(SkyscribeLib PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
 target_link_libraries(SkyscribeLib PUBLIC nlohmann_json::nlohmann_json imgui_node_editor)
-target_compile_definitions(SkyscribeLib PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+target_compile_definitions(SkyscribeLib PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
 target_compile_features(SkyscribeLib PUBLIC cxx_std_17)
 
 # ── Main executable sources (app + ui, excluding lib sources) ─────────────────
@@ -60,6 +60,7 @@ target_link_libraries(Skyscribe PRIVATE
     shell32
     ole32
     comdlg32
+    dwmapi
 )
 
 target_compile_definitions(Skyscribe PRIVATE
@@ -67,6 +68,7 @@ target_compile_definitions(Skyscribe PRIVATE
     _UNICODE
     NOMINMAX
     WIN32_LEAN_AND_MEAN
+    _WIN32_WINNT=0x0A00
 )
 
 # ── Tests ─────────────────────────────────────────────────────────────────────

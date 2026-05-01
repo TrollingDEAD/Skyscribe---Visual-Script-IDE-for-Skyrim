@@ -2,6 +2,7 @@
 
 #include "ui/ToolPalettePanel.h"
 #include "ui/GraphEditorPanel.h"
+#include "ui/ProjectPanel.h"
 #include "ui/PreviewPanel.h"
 #include "ui/OutputPanel.h"
 #include "ui/SettingsModal.h"
@@ -36,6 +37,7 @@ private:
 
     ToolPalettePanel  tool_palette_;
     GraphEditorPanel  graph_editor_;
+    ProjectPanel      project_panel_;
     PreviewPanel      preview_;
     OutputPanel       output_panel_;
     SettingsModal     settings_modal_;

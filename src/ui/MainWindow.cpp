@@ -66,7 +66,10 @@ void MainWindow::Render() {
 
     // ── Keyboard shortcuts ────────────────────────────────────────────────────
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_S)) {
-        if (project::Project::Get().IsOpen()) project::Project::Get().Save();
+        if (project::Project::Get().IsOpen()) {
+            graph_editor_.SyncNodePositions();
+            project::Project::Get().Save();
+        }
     }
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_O)) {
         // Open project picker — handled below via flag (can't call Win32 inside Begin)
@@ -104,6 +107,7 @@ void MainWindow::Render() {
     // ── Panels ───────────────────────────────────────────────────────────────
     tool_palette_.Render();
     graph_editor_.Render();
+    project_panel_.Render();
     preview_.Render();
     output_panel_.Render();
 

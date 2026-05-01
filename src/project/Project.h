@@ -1,5 +1,7 @@
 #pragma once
 
+#include "graph/ScriptGraph.h"
+
 #include <string>
 #include <vector>
 
@@ -52,6 +54,21 @@ public:
     // Mark the project as having unsaved changes.
     void MarkDirty() { dirty_ = true; }
 
+    // ── Scripts ──────────────────────────────────────────────────────────────
+
+    // Add a new blank script. Returns a reference to it.
+    graph::ScriptGraph& AddScript(const std::string& name,
+                                  const std::string& extends = "ObjectReference");
+
+    void RemoveScript(size_t index);
+    void RenameScript(size_t index, const std::string& new_name);
+
+    const std::vector<graph::ScriptGraph>& Scripts() const { return scripts_; }
+          std::vector<graph::ScriptGraph>& Scripts()       { return scripts_; }
+
+    int  ActiveScriptIndex() const { return active_script_idx_; }
+    void SetActiveScript(int index);
+
     // ── Recent projects ──────────────────────────────────────────────────────
 
     const std::vector<std::string>& RecentProjects() const { return recent_; }
@@ -70,6 +87,9 @@ private:
     ProjectMeta meta_;
     bool        is_open_ = false;
     bool        dirty_   = false;
+
+    std::vector<graph::ScriptGraph> scripts_;
+    int                             active_script_idx_ = -1;
 
     std::vector<std::string> recent_; // up to 10, most-recent first
 };

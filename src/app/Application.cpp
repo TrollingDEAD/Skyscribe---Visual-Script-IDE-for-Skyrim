@@ -11,6 +11,7 @@
 #include <imgui_impl_dx11.h>
 
 #include <shlobj.h>
+#include <shellscalingapi.h>
 #include <filesystem>
 #include <stdexcept>
 
@@ -159,8 +160,8 @@ void Application::Shutdown() {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 bool Application::CreateAppWindow() {
-    // Enable per-monitor DPI awareness (Windows 10 1703+).
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    // Enable DPI awareness (works on Vista+; best available on this build config).
+    SetProcessDPIAware();
 
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(WNDCLASSEX);
