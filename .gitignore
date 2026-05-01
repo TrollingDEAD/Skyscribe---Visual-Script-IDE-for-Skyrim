@@ -1,0 +1,38 @@
+# Build directories
+build/
+out/
+
+# vcpkg installed packages (managed by vcpkg, not committed)
+vcpkg_installed/
+
+# SQLite reflection cache
+*.db
+*.db-shm
+*.db-wal
+
+# Skyscribe temp artifacts
+.skyscribe_tmp/
+
+# Compiled output (committed via .skyscribe.json mirror instead)
+*.pex
+*.bsa
+
+# ImGui layout (user-local, not committed)
+imgui.ini
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS
+Thumbs.db
+.DS_Store
