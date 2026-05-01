@@ -3,6 +3,7 @@
 #include "app/Settings.h"
 #include "project/Project.h"
 #include "project/TemplateRegistry.h"
+#include "graph/BuiltinNodes.h"
 #include "ui/MainWindow.h"
 
 #include <imgui.h>
@@ -45,6 +46,9 @@ bool Application::Init() {
 
     // Scan for project templates.
     project::TemplateRegistry::Get().Scan();
+
+    // Register all built-in script nodes.
+    graph::BuiltinNodes::RegisterAll();
 
     if (!CreateAppWindow()) {
         LOG_ERR("Failed to create Win32 window");

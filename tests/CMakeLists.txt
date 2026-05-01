@@ -4,6 +4,7 @@ find_package(Catch2 CONFIG REQUIRED)
 
 add_executable(SkyscribeTests
     test_output_parser.cpp
+    test_graph_model.cpp
 )
 
 target_link_libraries(SkyscribeTests PRIVATE
