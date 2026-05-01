@@ -1,5 +1,7 @@
 #include "app/Application.h"
 #include "app/Logger.h"
+#include "app/Settings.h"
+#include "project/Project.h"
 #include "ui/MainWindow.h"
 
 #include <imgui.h>
@@ -32,6 +34,13 @@ bool Application::Init() {
     // Logger must come up before anything else so we can record failures.
     Logger::Get().Init(GetAppDataDir() + "\\skyscribe.log");
     LOG_INFO("Skyscribe starting up");
+
+    // Load settings.
+    const std::string config_path = GetAppDataDir() + "\\config.json";
+    Settings::Get().Load(config_path);
+
+    // Load recent projects list.
+    project::Project::Get().LoadRecent(config_path);
 
     if (!CreateAppWindow()) {
         LOG_ERR("Failed to create Win32 window");
@@ -106,6 +115,11 @@ void Application::Shutdown() {
     // Save layout before teardown.
     ImGui::SaveIniSettingsToDisk(GetIniPath().c_str());
     LOG_INFO("ImGui layout saved");
+
+    // Save settings and recent projects.
+    const std::string config_path = GetAppDataDir() + "\\config.json";
+    Settings::Get().Save(config_path);
+    project::Project::Get().SaveRecent(config_path);
 
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
