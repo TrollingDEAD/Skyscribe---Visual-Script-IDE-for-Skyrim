@@ -301,12 +301,12 @@ tests/
 
 ## Definition of Done
 
-- [ ] `cmake --preset release` builds with zero errors and zero warnings
-- [ ] `HelloWorld.psc` compiles to `.pex` via **Compile â†’ Build** (`F7`) without leaving the application
-- [ ] Compiler errors appear in the Output Panel with file name + line number, colour-coded
-- [ ] `OutputParser` unit tests pass (`ctest --preset release`)
-- [ ] Settings (compiler path, import dirs, autosave) persist across restarts via `config.json`
-- [ ] **New / Open / Save / Close** project lifecycle works; dirty flag shown in title bar
-- [ ] Missing CK shows a modal with **[Open Settings]** + **[Download CK]** buttons
-- [ ] Window position/size restores after restart; DPI change does not corrupt layout
-- [ ] `LOG_INFO("Compile started")` and `LOG_INFO("Compile finished: <result>")` appear in `skyscribe.log`
+- [x] `cmake --preset release` builds with zero errors and zero warnings
+- [x] `HelloWorld.psc` compiles to `.pex` via **Compile → Build** (`F7`) without leaving the application
+- [x] Compiler errors appear in the Output Panel with file name + line number, colour-coded
+- [x] `OutputParser` unit tests pass (`ctest --preset release`)
+- [x] Settings (compiler path, import dirs, autosave) persist across restarts via `config.json`
+- [x] **New / Open / Save / Close** project lifecycle works; dirty flag shown in title bar
+- [x] Missing CK shows a modal with **[Open Settings]** + **[Download CK]** buttons
+- [x] Window position/size restores after restart; DPI change does not corrupt layout
+- [x] `LOG_INFO("Compile started")` and `LOG_INFO("Compile finished: <result>")` appear in `skyscribe.log`

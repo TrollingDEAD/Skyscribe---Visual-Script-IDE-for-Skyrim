@@ -1,8 +1,6 @@
 #include "project/TemplateRegistry.h"
 #include "app/Logger.h"
 
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <Windows.h>
 
 #include <nlohmann/json.hpp>
