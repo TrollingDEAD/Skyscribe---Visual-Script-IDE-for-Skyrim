@@ -34,6 +34,14 @@ void Settings::Load(const std::string& config_path) {
 
         autosave_enabled    = j.value("autosave_enabled",    true);
         autosave_interval_s = j.value("autosave_interval_s", 300);
+
+        if (j.contains("window")) {
+            const auto& w = j["window"];
+            window_x = w.value("x", -1);
+            window_y = w.value("y", -1);
+            window_w = w.value("w", 1280);
+            window_h = w.value("h", 720);
+        }
     } catch (const std::exception& e) {
         LOG_WARN(std::string("Settings::Load failed: ") + e.what());
     }
@@ -51,6 +59,10 @@ void Settings::Save(const std::string& config_path) const {
     j["import_dirs"]       = import_dirs;
     j["autosave_enabled"]  = autosave_enabled;
     j["autosave_interval_s"] = autosave_interval_s;
+    j["window"] = {
+        {"x", window_x}, {"y", window_y},
+        {"w", window_w}, {"h", window_h}
+    };
 
     const std::string tmp_path = config_path + ".tmp";
     try {

@@ -2,6 +2,7 @@
 #include "app/Logger.h"
 #include "app/Settings.h"
 #include "project/Project.h"
+#include "project/TemplateRegistry.h"
 #include "ui/MainWindow.h"
 
 #include <imgui.h>
@@ -41,6 +42,9 @@ bool Application::Init() {
 
     // Load recent projects list.
     project::Project::Get().LoadRecent(config_path);
+
+    // Scan for project templates.
+    project::TemplateRegistry::Get().Scan();
 
     if (!CreateAppWindow()) {
         LOG_ERR("Failed to create Win32 window");
@@ -117,6 +121,17 @@ void Application::Shutdown() {
     LOG_INFO("ImGui layout saved");
 
     // Save settings and recent projects.
+    // Persist current window position/size so it can be restored next launch.
+    if (hwnd_) {
+        RECT r = {};
+        if (GetWindowRect(hwnd_, &r)) {
+            auto& s = Settings::Get();
+            s.window_x = r.left;
+            s.window_y = r.top;
+            s.window_w = r.right  - r.left;
+            s.window_h = r.bottom - r.top;
+        }
+    }
     const std::string config_path = GetAppDataDir() + "\\config.json";
     Settings::Get().Save(config_path);
     project::Project::Get().SaveRecent(config_path);
@@ -140,6 +155,9 @@ void Application::Shutdown() {
 // ── Private helpers ───────────────────────────────────────────────────────────
 
 bool Application::CreateAppWindow() {
+    // Enable per-monitor DPI awareness (Windows 10 1703+).
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
     WNDCLASSEX wc = {};
     wc.cbSize        = sizeof(WNDCLASSEX);
     wc.style         = CS_HREDRAW | CS_VREDRAW;
@@ -151,11 +169,17 @@ bool Application::CreateAppWindow() {
         return false;
 
     // Create window; store 'this' in GWLP_USERDATA for WndProc access.
+    // Restore saved rect if available, clamped to a sane minimum.
+    const auto& s = Settings::Get();
+    const int x = (s.window_x >= 0) ? s.window_x : CW_USEDEFAULT;
+    const int y = (s.window_y >= 0) ? s.window_y : CW_USEDEFAULT;
+    const int w = (s.window_w > 0)  ? s.window_w : 1280;
+    const int h = (s.window_h > 0)  ? s.window_h : 720;
+
     hwnd_ = CreateWindowEx(
         0, L"SkyscribeWnd", L"Skyscribe",
         WS_OVERLAPPEDWINDOW,
-        CW_USEDEFAULT, CW_USEDEFAULT,
-        1280, 720,
+        x, y, w, h,
         nullptr, nullptr,
         GetModuleHandle(nullptr), this);
 
@@ -273,6 +297,17 @@ LRESULT WINAPI Application::WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM l
             app->CreateRenderTarget();
         }
         return 0;
+
+    case WM_DPICHANGED: {
+        // System provides the suggested new rect in lParam.
+        const RECT* r = reinterpret_cast<const RECT*>(lParam);
+        SetWindowPos(hWnd, nullptr,
+                     r->left, r->top,
+                     r->right  - r->left,
+                     r->bottom - r->top,
+                     SWP_NOZORDER | SWP_NOACTIVATE);
+        return 0;
+    }
 
     case WM_SYSCOMMAND:
         // Suppress the beep on Alt+key.

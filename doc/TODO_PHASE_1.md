@@ -16,7 +16,7 @@
   - `Settings::Load()` â€” reads config, applies defaults for missing keys
   - `Settings::Save()` â€” atomic write (write to `.tmp`, rename to `.json`)
   - `Settings::Validate()` â€” returns a list of validation errors; each field reports independently
-- [ ] Open Settings via **Edit â†’ Settingsâ€¦** (or `Ctrl+,`)
+- [x] Open Settings via **Edit â†’ Settingsâ€¦** (or `Ctrl+,`)
 - [x] Settings modal (`ImGui::BeginPopupModal`), tabbed layout:
   - **Compiler** tab â€” `PapyrusCompiler.exe` path (browse button + inline validation icon); CK Data path; Output directory
   - **Paths** tab â€” Import directories list: add / remove / reorder rows
@@ -38,7 +38,7 @@ src/ui/SettingsModal.cpp
 
 ### 1.2 â€” `CompilerWrapper` class `P0`
 
-- [ ] Create `src/compiler/CompilerWrapper.h` / `CompilerWrapper.cpp`:
+- [x] Create `src/compiler/CompilerWrapper.h` / `CompilerWrapper.cpp`:
   - `CompilerWrapper::BuildArgs(script_path)` â€” assembles the full command line:
     - `PapyrusCompiler.exe <script.psc> -f=<flags_file> -i=<import1>;<import2>;â€¦ -o=<output_dir>`
   - `CompilerWrapper::Invoke(script_path, callback)` â€” launches process via `CreateProcess` with stdout/stderr redirected through an anonymous pipe:
@@ -47,9 +47,9 @@ src/ui/SettingsModal.cpp
     - Implements 60-second timeout; on timeout calls `TerminateProcess` and raises a modal
   - `CompilerWrapper::Cancel()` â€” terminates the in-flight compile process
   - `struct CompileResult { bool success; std::vector<CompilerLine> lines; int exit_code; }`
-- [ ] Flags file auto-detection: search for `TESV_Papyrus_Flags.flg` under the CK Data path
-- [ ] Import directory auto-discovery: scan `Data\Scripts\Source\` and any user-specified extras from Settings; deduplicate
-- [ ] Acceptance: `CompilerWrapper::Invoke` wraps `CreateProcess`; captures stdout/stderr; returns structured result
+- [x] Flags file auto-detection: search for `TESV_Papyrus_Flags.flg` under the CK Data path
+- [x] Import directory auto-discovery: scan `Data\Scripts\Source\` and any user-specified extras from Settings; deduplicate
+- [x] Acceptance: `CompilerWrapper::Invoke` wraps `CreateProcess`; captures stdout/stderr; returns structured result
 
 **Files to create:**
 ```
@@ -61,7 +61,7 @@ src/compiler/CompilerWrapper.cpp
 
 ### 1.3 â€” Compiler output panel `P0`
 
-- [ ] Create `src/ui/OutputPanel.h` / `OutputPanel.cpp` (replaces the Preview stub or adds a new docked panel):
+- [x] Create `src/ui/OutputPanel.h` / `OutputPanel.cpp` (replaces the Preview stub or adds a new docked panel):
   - Dockable ImGui window, label `"Output"`
   - Displays `CompilerLine` entries in a scrollable list
   - Color-coded rows: errors â†’ red, warnings â†’ yellow, info â†’ default text colour, success â†’ green
@@ -70,9 +70,9 @@ src/compiler/CompilerWrapper.cpp
   - Filter dropdown: **All / Errors / Warnings / Info**
   - Auto-scroll to bottom on new output; scroll lock button (ðŸ“Œ) to disable auto-scroll
   - Fatal error modal: if compiler exits with code â‰  0 and â‰  1, show `ImGui::OpenPopup("CompilerFatalError")`
-- [ ] **[Cancel]** button visible in the panel during an active compile; calls `CompilerWrapper::Cancel()`
-- [ ] Output cleared on each new compile invocation
-- [ ] Acceptance: errors shown with script name + line number; panel visible in the default layout
+- [x] **[Cancel]** button visible in the panel during an active compile; calls `CompilerWrapper::Cancel()`
+- [x] Output cleared on each new compile invocation
+- [x] Acceptance: errors shown with script name + line number; panel visible in the default layout
 
 **Files to create:**
 ```
@@ -84,7 +84,7 @@ src/ui/OutputPanel.cpp
 
 ### 1.4 â€” Compiler output parsing `P0`
 
-- [ ] Create `src/compiler/CompilerLine.h`:
+- [x] Create `src/compiler/CompilerLine.h`:
   ```cpp
   enum class LineKind { Info, Warning, Error, Success };
   struct CompilerLine {
@@ -94,19 +94,19 @@ src/ui/OutputPanel.cpp
       std::string text;   // full raw line
   };
   ```
-- [ ] Create `src/compiler/OutputParser.h` / `OutputParser.cpp`:
+- [x] Create `src/compiler/OutputParser.h` / `OutputParser.cpp`:
   - `OutputParser::Parse(raw_line) â†’ CompilerLine`
   - Regex rules (in priority order):
     1. `^(.+)\((\d+),\d+\): error: (.+)$` â†’ `LineKind::Error`
     2. `^(.+)\((\d+),\d+\): warning: (.+)$` â†’ `LineKind::Warning`
     3. `^Assembly of .+ succeeded$` â†’ `LineKind::Success`
     4. Anything else â†’ `LineKind::Info`
-- [ ] Unit tests in `tests/test_output_parser.cpp` (Catch2):
+- [x] Unit tests in `tests/test_output_parser.cpp` (Catch2):
   - Error line parses correctly (file, line number, message)
   - Warning line parses correctly
   - Success line detected
   - Unknown line classified as `Info`
-- [ ] Acceptance: `OutputParser::Parse` correctly classifies all four line types
+- [x] Acceptance: `OutputParser::Parse` correctly classifies all four line types
 
 **Files to create:**
 ```
@@ -120,9 +120,9 @@ tests/test_output_parser.cpp
 
 ### 1.5 â€” "Hello World" compile test `P0`
 
-- [ ] Add **Compile â†’ Build** menu item (also `F7` shortcut)
-- [ ] On invoke: run `CompilerWrapper::Invoke` on the active script path (Phase 1: hardcode a test `.psc` if no project is open)
-- [ ] Ship a minimal test script at `tests/scripts/HelloWorld.psc`:
+- [x] Add **Compile â†’ Build** menu item (also `F7` shortcut)
+- [x] On invoke: run `CompilerWrapper::Invoke` on the active script path (Phase 1: hardcode a test `.psc` if no project is open)
+- [x] Ship a minimal test script at `tests/scripts/HelloWorld.psc`:
   ```papyrus
   ScriptName HelloWorld
 
@@ -130,7 +130,7 @@ tests/test_output_parser.cpp
     Debug.Notification("Hello from Skyscribe")
   EndEvent
   ```
-- [ ] Acceptance: `HelloWorld.psc` compiles to `HelloWorld.pex` in the configured output directory; output appears in the Output Panel
+- [x] Acceptance: `HelloWorld.psc` compiles to `HelloWorld.pex` in the configured output directory; output appears in the Output Panel
 
 **Files to create:**
 ```
@@ -141,17 +141,17 @@ tests/scripts/HelloWorld.psc
 
 ### 1.6 â€” Missing CK error handling `P1`
 
-- [ ] If `PapyrusCompiler.exe` is not found at the configured path on compile invocation:
+- [x] If `PapyrusCompiler.exe` is not found at the configured path on compile invocation:
   - Show an `ImGui::OpenPopup("NoCKFound")` modal: _"Creation Kit compiler not found. Please configure the path in Edit â†’ Settings."_
   - Provide a **[Open Settings]** button in the modal
   - Provide a **[Download CK]** button that opens `https://store.steampowered.com/app/1946180` via `ShellExecuteW`
-- [ ] Acceptance: graceful message + link to CK download if exe not found
+- [x] Acceptance: graceful message + link to CK download if exe not found
 
 ---
 
 ### 1.7 â€” Project lifecycle (New / Open / Save / Close) `P0`
 
-- [ ] Define `src/project/Project.h` / `Project.cpp`:
+- [x] Define `src/project/Project.h` / `Project.cpp`:
   - `struct ProjectMeta { std::string name; std::string root_dir; std::string created_at; std::string skyscribe_version; }`
   - `.skyscribe` project file format (JSON):
     ```json
@@ -165,17 +165,17 @@ tests/scripts/HelloWorld.psc
   - `Project::Open(path)` â€” three-tier fallback: exact path â†’ scan dir for `.skyscribe` â†’ prompt user
   - `Project::Save()` â€” atomic write (`.tmp` â†’ rename)
   - `Project::Close()` â€” checks dirty flag, prompts if unsaved changes
-- [ ] **File â†’ New Project** opens a dialog:
-  - Fields: project name, parent directory (browse), template picker (see task 1.9)
+- [x] **File → New Project** opens a dialog:
+  - Fields: project name, parent directory (browse), template picker (see task 1.8)
   - Creates `<parent>/<name>/` and writes the `.skyscribe` file
-- [ ] **File â†’ Open Project** (`Ctrl+O`) â€” Win32 file picker filtered to `*.skyscribe`
-- [ ] **File â†’ Save** (`Ctrl+S`) â€” saves current project
-- [ ] **File â†’ Save Asâ€¦** â€” Win32 save-file picker; updates project root path
-- [ ] **File â†’ Close Project** â€” unloads current project; returns to empty state
-- [ ] Recent projects list (last 10) persisted in `config.json`; shown in **File â†’ Recent Projects** submenu
-- [ ] Dirty flag: title bar shows `Skyscribe â€” <project name> *` when there are unsaved changes
-- [ ] Unsaved-changes prompt on **Close / Open / New** when dirty flag is set
-- [ ] Acceptance: project files save and load; dirty flag and title bar indicator work
+- [x] **File → Open Project** (`Ctrl+O`) — Win32 file picker filtered to `*.skyscribe`
+- [x] **File → Save** (`Ctrl+S`) — saves current project
+- [x] **File → Save As…** — Win32 save-file picker; updates project root path
+- [x] **File → Close Project** — unloads current project; returns to empty state
+- [x] Recent projects list (last 10) persisted in `config.json`; shown in **File → Recent Projects** submenu
+- [x] Dirty flag: title bar shows `Skyscribe — <project name> *` when there are unsaved changes
+- [x] Unsaved-changes prompt on **Close / Open / New** when dirty flag is set
+- [x] Acceptance: project files save and load; dirty flag and title bar indicator work
 
 **Files to create:**
 ```
@@ -189,15 +189,15 @@ src/ui/NewProjectDialog.cpp
 
 ### 1.8 â€” New Project template system `P1`
 
-- [ ] `src/project/TemplateRegistry.h` / `TemplateRegistry.cpp`:
+- [x] `src/project/TemplateRegistry.h` / `TemplateRegistry.cpp`:
   - Scans `<exe_dir>\templates\` for subdirectories; each is a project template
   - Each template directory contains a `template.json` manifest (name, description, files to copy)
-- [ ] Ship three built-in templates under `templates/`:
-  - `Blank` â€” empty `.skyscribe` file only
-  - `QuestMod` â€” starter Quest script stub
-  - `ActorAlias` â€” starter alias script stub
-- [ ] New Project dialog shows a template list panel with description text
-- [ ] Acceptance: all three templates appear in the New Project dialog; selecting one copies the correct stubs
+- [x] Ship three built-in templates under `templates/`:
+  - `Blank` â€" empty `.skyscribe` file only
+  - `QuestMod` â€" starter Quest script stub
+  - `ActorAlias` â€" starter alias script stub
+- [x] New Project dialog shows a template list panel with description text
+- [x] Acceptance: all three templates appear in the New Project dialog; selecting one copies the correct stubs
 
 **Files to create:**
 ```
@@ -214,29 +214,29 @@ templates/ActorAlias/AliasScript.psc
 
 ### 1.9 â€” Window layout & DPI persistence `P1`
 
-- [ ] Persist window rect (position + size) in `config.json` under `"window": { "x", "y", "w", "h" }`
-- [ ] On startup: restore saved rect; clamp to available monitor work area to avoid off-screen placement
-- [ ] DPI awareness:
+- [x] Persist window rect (position + size) in `config.json` under `"window": { "x", "y", "w", "h" }`
+- [x] On startup: restore saved rect; clamp to available monitor work area to avoid off-screen placement
+- [x] DPI awareness:
   - Set `DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2` via `SetProcessDpiAwarenessContext`
   - Handle `WM_DPICHANGED`: update window rect from `lParam`, scale ImGui font size
-- [ ] Layout validity check already in `MainWindow::Render()` (Phase 0); add auto-reset if `ImGui::DockBuilderGetNode` returns null
-- [ ] Acceptance: window position/size restores across restarts; DPI changes don't corrupt the layout
+- [x] Layout validity check already in `MainWindow::Render()` (Phase 0); add auto-reset if `ImGui::DockBuilderGetNode` returns null
+- [x] Acceptance: window position/size restores across restarts; DPI changes don't corrupt the layout
 
 ---
 
 ### 1.10 â€” Help menu & About dialog `P1`
 
-- [ ] **Help â†’ Keyboard Shortcuts** â€” modal listing all shortcuts (`ImGui::BeginTable`, two columns: action / key)
-- [ ] **Help â†’ About Skyscribe** â€” modal showing version string, build date, GPL v3 notice, GitHub link
-- [ ] **Help â†’ View Log Fileâ€¦** â€” already wired in Phase 0; verify it works with the updated Logger
-- [ ] **Help â†’ Report a Bug** â€” `ShellExecuteW` to open GitHub issues URL
-- [ ] Acceptance: all four Help items functional
+- [x] **Help â†' Keyboard Shortcuts** â€" modal listing all shortcuts (`ImGui::BeginTable`, two columns: action / key)
+- [x] **Help â†' About Skyscribe** â€" modal showing version string, build date, GPL v3 notice, GitHub link
+- [x] **Help â View Log Fileâ¦** â already wired in Phase 0; verify it works with the updated Logger
+- [x] **Help â†' Report a Bug** â€" `ShellExecuteW` to open GitHub issues URL
+- [x] Acceptance: all four Help items functional
 
 ---
 
 ### 1.11 â€” Type registry stub `P1`
 
-- [ ] Create `src/graph/PinType.h`:
+- [x] Create `src/graph/PinType.h`:
   ```cpp
   enum class PinType {
       Exec, Bool, Int, Float, String,
@@ -245,9 +245,9 @@ templates/ActorAlias/AliasScript.psc
       Array_ObjectRef, Unknown
   };
   ```
-- [ ] `src/graph/PinColorMap.h` â€” `ImVec4 PinColor(PinType)` mapping (used in Phase 2 node editor)
-- [ ] `PinType::IsCompatible(PinType from, PinType to) â†’ bool` â€” basic subtype check (e.g. `Actor` â†’ `ObjectRef` is valid)
-- [ ] `None` literal: unconnected object-type output pins emit `None` in generated code
+- [x] `src/graph/PinColorMap.h` â€” `ImVec4 PinColor(PinType)` mapping (used in Phase 2 node editor)
+- [x] `PinType::IsCompatible(PinType from, PinType to) â†’ bool` â€” basic subtype check (e.g. `Actor` â†’ `ObjectRef` is valid)
+- [x] `None` literal: unconnected object-type output pins emit `None` in generated code
 
 **Files to create:**
 ```

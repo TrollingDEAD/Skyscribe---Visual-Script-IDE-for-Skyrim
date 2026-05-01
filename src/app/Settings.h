@@ -26,6 +26,12 @@ public:
     bool autosave_enabled    = true;
     int  autosave_interval_s = 300; // default 5 minutes
 
+    // Window state
+    int  window_x = -1;  // -1 = use CW_USEDEFAULT
+    int  window_y = -1;
+    int  window_w = 1280;
+    int  window_h = 720;
+
     // Load from config_path. Missing keys take defaults. No-op if file absent.
     void Load(const std::string& config_path);
 

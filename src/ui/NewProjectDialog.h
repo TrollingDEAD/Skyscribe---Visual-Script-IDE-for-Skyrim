@@ -15,6 +15,7 @@ private:
     std::string BrowseForFolder() const;
 
     bool open_ = false;
+    int  selected_template_ = 0; // index into TemplateRegistry::Templates()
 
     char name_buf_[256]       = {};
     char parent_dir_buf_[512] = {};

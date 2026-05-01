@@ -1,0 +1,4 @@
+{
+    "name": "Quest Mod",
+    "description": "Starter Quest script with OnInit and stage handlers. Rename 'MyQuestScript' to match your quest alias."
+}

@@ -1,5 +1,6 @@
 #include "ui/NewProjectDialog.h"
 #include "project/Project.h"
+#include "project/TemplateRegistry.h"
 #include "app/Logger.h"
 
 #include <imgui.h>
@@ -17,6 +18,7 @@ namespace ui {
 void NewProjectDialog::Open() {
     if (open_) return;
     open_ = true;
+    selected_template_ = 0;
     memset(name_buf_, 0, sizeof(name_buf_));
     memset(parent_dir_buf_, 0, sizeof(parent_dir_buf_));
     error_msg_.clear();
@@ -26,15 +28,18 @@ void NewProjectDialog::Open() {
 void NewProjectDialog::Render() {
     if (!open_) return;
 
-    ImGui::SetNextWindowSize(ImVec2(480, 200), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(520, 320), ImGuiCond_FirstUseEver);
     if (!ImGui::BeginPopupModal("New Project", nullptr,
                                 ImGuiWindowFlags_AlwaysAutoResize)) return;
 
+    // ── Project name ──────────────────────────────────────────────────────────
     ImGui::TextUnformatted("Project name:");
     ImGui::SetNextItemWidth(300.0f);
     ImGui::InputText("##name", name_buf_, sizeof(name_buf_));
 
     ImGui::Spacing();
+
+    // ── Parent directory ──────────────────────────────────────────────────────
     ImGui::TextUnformatted("Parent directory:");
     ImGui::SetNextItemWidth(360.0f);
     ImGui::InputText("##parent", parent_dir_buf_, sizeof(parent_dir_buf_));
@@ -46,9 +51,40 @@ void NewProjectDialog::Render() {
         }
     }
 
-    if (!error_msg_.empty()) {
+    ImGui::Spacing();
+
+    // ── Template picker ───────────────────────────────────────────────────────
+    const auto& templates = project::TemplateRegistry::Get().Templates();
+    if (!templates.empty()) {
+        ImGui::TextUnformatted("Template:");
+        ImGui::BeginChild("##templates", ImVec2(0, 100), true);
+
+        for (int i = 0; i < static_cast<int>(templates.size()); ++i) {
+            const bool selected = (selected_template_ == i);
+            if (ImGui::Selectable(templates[i].name.c_str(), selected,
+                                  ImGuiSelectableFlags_AllowDoubleClick)) {
+                selected_template_ = i;
+            }
+            if (selected && ImGui::IsItemHovered() &&
+                !templates[i].description.empty()) {
+                ImGui::SetTooltip("%s", templates[i].description.c_str());
+            }
+        }
+
+        ImGui::EndChild();
+
+        // Show description below the list
+        if (selected_template_ < static_cast<int>(templates.size()) &&
+            !templates[selected_template_].description.empty()) {
+            ImGui::TextDisabled("%s", templates[selected_template_].description.c_str());
+        }
         ImGui::Spacing();
+    }
+
+    // ── Error message ─────────────────────────────────────────────────────────
+    if (!error_msg_.empty()) {
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "%s", error_msg_.c_str());
+        ImGui::Spacing();
     }
 
     ImGui::Separator();
@@ -63,6 +99,17 @@ void NewProjectDialog::Render() {
             error_msg_ = "Please choose a valid parent directory.";
         } else {
             if (project::Project::Get().New(name, parent)) {
+                // Apply the selected template's stub files (if any)
+                const auto& tmpls = project::TemplateRegistry::Get().Templates();
+                if (!tmpls.empty() &&
+                    selected_template_ < static_cast<int>(tmpls.size())) {
+                    const std::string dest =
+                        parent + "\\" + name + "\\Scripts\\Source";
+                    std::error_code ec;
+                    std::filesystem::create_directories(dest, ec);
+                    project::TemplateRegistry::Get().Apply(
+                        tmpls[selected_template_], dest);
+                }
                 open_ = false;
                 ImGui::CloseCurrentPopup();
             } else {

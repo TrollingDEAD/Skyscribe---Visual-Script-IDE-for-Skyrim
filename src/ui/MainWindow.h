@@ -29,6 +29,8 @@ private:
     void RenderMenuBar();
     void RenderNoCKModal();
     void RenderUnsavedChangesModal();
+    void RenderAboutModal();
+    void RenderShortcutsModal();
 
     bool layout_built_ = false;
 
@@ -45,6 +47,8 @@ private:
     // Modals
     bool show_no_ck_modal_           = false;
     bool show_unsaved_changes_modal_ = false;
+    bool show_about_modal_           = false;
+    bool show_shortcuts_modal_       = false;
     // What to do after the user resolves unsaved changes: 0=none,1=new,2=open,3=close
     int  pending_after_unsaved_      = 0;
     std::string pending_open_path_;

@@ -81,6 +81,9 @@ void MainWindow::Render() {
     if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Comma)) {
         settings_modal_.Open();
     }
+    if (ImGui::IsKeyChordPressed(ImGuiMod_Ctrl | ImGuiKey_Slash)) {
+        show_shortcuts_modal_ = true;
+    }
 
     // ── Trigger deferred compile ──────────────────────────────────────────────
     if (trigger_compile_) {
@@ -111,6 +114,8 @@ void MainWindow::Render() {
     new_project_dialog_.Render();
     RenderNoCKModal();
     RenderUnsavedChangesModal();
+    RenderAboutModal();
+    RenderShortcutsModal();
 }
 
 // ── Menu bar ──────────────────────────────────────────────────────────────────
@@ -214,6 +219,8 @@ void MainWindow::RenderMenuBar() {
 
     // ── Help ─────────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Help")) {
+        if (ImGui::MenuItem("Keyboard Shortcuts", "Ctrl+/"))
+            show_shortcuts_modal_ = true;
         if (ImGui::MenuItem("View Log File…"))
             app::Logger::Get().OpenLogFile();
         if (ImGui::MenuItem("Report a Bug…"))
@@ -221,7 +228,8 @@ void MainWindow::RenderMenuBar() {
                 L"https://github.com/TrollingDEAD/Skyscribe---Visual-Script-IDE-for-Skyrim/issues",
                 nullptr, nullptr, SW_SHOW);
         ImGui::Separator();
-        if (ImGui::MenuItem("About Skyscribe")) { /* stub — Phase 1.10 */ }
+        if (ImGui::MenuItem("About Skyscribe"))
+            show_about_modal_ = true;
         ImGui::EndMenu();
     }
 
@@ -335,6 +343,91 @@ void MainWindow::BuildDefaultLayout(ImGuiID dockspace_id) {
     ImGui::DockBuilderDockWindow("Output",        dock_output);
 
     ImGui::DockBuilderFinish(dockspace_id);
+}
+
+// ── About modal ───────────────────────────────────────────────────────────────
+
+void MainWindow::RenderAboutModal() {
+    if (!show_about_modal_) return;
+    ImGui::OpenPopup("About Skyscribe");
+    show_about_modal_ = false;
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(400, 0), ImGuiCond_Always);
+
+    if (ImGui::BeginPopupModal("About Skyscribe", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoResize)) {
+        ImGui::TextUnformatted("Skyscribe");
+        ImGui::SameLine();
+        ImGui::TextDisabled("Phase 1 — Compiler Pipeline");
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::TextWrapped(
+            "A visual Papyrus scripting IDE for The Elder Scrolls V: Skyrim.\n"
+            "Built with C++17, Dear ImGui, and Direct3D 11.");
+        ImGui::Spacing();
+        ImGui::TextDisabled("github.com/TrollingDEAD/Skyscribe");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - 60.0f) * 0.5f +
+                              ImGui::GetCursorPosX());
+        if (ImGui::Button("Close", ImVec2(60, 0)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+}
+
+// ── Keyboard Shortcuts modal ──────────────────────────────────────────────────
+
+void MainWindow::RenderShortcutsModal() {
+    if (!show_shortcuts_modal_) return;
+    ImGui::OpenPopup("Keyboard Shortcuts");
+    show_shortcuts_modal_ = false;
+
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(480, 0), ImGuiCond_Always);
+
+    if (ImGui::BeginPopupModal("Keyboard Shortcuts", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize |
+                               ImGuiWindowFlags_NoResize)) {
+        struct ShortcutEntry { const char* key; const char* action; };
+        static const ShortcutEntry kShortcuts[] = {
+            { "Ctrl+N",      "New Project"              },
+            { "Ctrl+O",      "Open Project"             },
+            { "Ctrl+S",      "Save Project"             },
+            { "Ctrl+Shift+S","Save Project As…"         },
+            { "F7",          "Compile (Build)"          },
+            { "Ctrl+,",      "Open Settings"            },
+            { "Ctrl+/",      "Keyboard Shortcuts"       },
+        };
+
+        if (ImGui::BeginTable("##shortcuts", 2,
+                              ImGuiTableFlags_BordersInnerH |
+                              ImGuiTableFlags_RowBg,
+                              ImVec2(0, 0))) {
+            ImGui::TableSetupColumn("Shortcut", ImGuiTableColumnFlags_WidthFixed, 160.0f);
+            ImGui::TableSetupColumn("Action",   ImGuiTableColumnFlags_WidthStretch);
+            ImGui::TableHeadersRow();
+            for (const auto& s : kShortcuts) {
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                ImGui::TextUnformatted(s.key);
+                ImGui::TableSetColumnIndex(1);
+                ImGui::TextUnformatted(s.action);
+            }
+            ImGui::EndTable();
+        }
+
+        ImGui::Spacing();
+        ImGui::SetCursorPosX((ImGui::GetContentRegionAvail().x - 60.0f) * 0.5f +
+                              ImGui::GetCursorPosX());
+        if (ImGui::Button("Close", ImVec2(60, 0)))
+            ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
 }
 
 } // namespace ui

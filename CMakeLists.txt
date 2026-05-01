@@ -59,3 +59,11 @@ target_compile_definitions(Skyscribe PRIVATE
 # ── Tests ─────────────────────────────────────────────────────────────────────
 enable_testing()
 add_subdirectory(tests)
+
+# ── Post-build: copy templates next to the executable ─────────────────────────
+add_custom_command(TARGET Skyscribe POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/templates"
+        "$<TARGET_FILE_DIR:Skyscribe>/templates"
+    COMMENT "Copying templates to output directory"
+)
