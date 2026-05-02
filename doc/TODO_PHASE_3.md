@@ -207,16 +207,16 @@ src/codegen/PapyrusLexer.cpp
 
 > ROADMAP §3 (data flow), §2 (`ImGuiColorTextEdit`)
 
-- [ ] Update `src/ui/PreviewPanel.h` / `PreviewPanel.cpp`:
+- [x] Update `src/ui/PreviewPanel.h` / `PreviewPanel.cpp`:
   - Embed an `ImGuiColorTextEdit::TextEditor` instance
   - `SetSource(const std::string& psc)` — updates the editor's text content
   - `Render()` — draws the editor in read-only mode (unless 3.8 editable override is implemented)
   - Title: `"Preview — <ScriptName>.psc"`
   - Show `"[Live preview disabled]"` grey text when `live_preview_enabled = false`
-- [ ] Wire into `GraphEditorPanel::RenderCanvas()`:
+- [x] Wire into `GraphEditorPanel::RenderCanvas()`:
   - After dirty-flag regen (3.5), call `preview_panel_.SetSource(last_generated_)`
   - Pass `PreviewPanel` reference into `GraphEditorPanel` via constructor or `Application`
-- [ ] Acceptance: changing a node connection updates the preview text within one frame; syntax highlighting works
+- [x] Acceptance: changing a node connection updates the preview text within one frame; syntax highlighting works
 
 **Files to modify:**
 ```

@@ -149,6 +149,7 @@ void MainWindow::Render() {
 
                     auto lint = codegen::LintPass::Run(g);
                     preview_.SetDiagnostics(lint);
+                    preview_.SetScriptName(g.script_name);
                     auto gen = codegen::PapyrusStringBuilder::Generate(g);
                     preview_.SetSource(gen.source);
                 }

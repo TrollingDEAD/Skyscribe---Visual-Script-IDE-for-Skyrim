@@ -48,7 +48,11 @@ void PreviewPanel::SetDiagnostics(const std::vector<codegen::LintDiagnostic>& di
 }
 
 void PreviewPanel::Render() {
-    ImGui::Begin("Preview");
+    // Build the window title: "Preview — <ScriptName>.psc" when a script is active.
+    std::string title = script_name_.empty()
+        ? "Preview"
+        : ("Preview \xe2\x80\x94 " + script_name_ + ".psc");
+    ImGui::Begin(title.c_str());
 
     // ── Edit-mode toolbar ──────────────────────────────────────────────────
     if (!edit_mode_) {

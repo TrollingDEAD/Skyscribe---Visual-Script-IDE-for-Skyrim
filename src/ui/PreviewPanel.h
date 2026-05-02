@@ -37,6 +37,9 @@ public:
     // Called every frame by MainWindow; controls whether live-preview banner is shown.
     void SetLivePreviewEnabled(bool enabled) { live_preview_enabled_ = enabled; }
 
+    // Sets the script name shown in the panel title bar.
+    void SetScriptName(const std::string& name) { script_name_ = name; }
+
 private:
     TextEditor  editor_;
     bool        lang_set_              = false;
@@ -45,6 +48,7 @@ private:
     bool        confirm_sync_open_     = false;
     bool        live_preview_enabled_  = true;
     std::string source_;            // last generated source (always up-to-date)
+    std::string script_name_;       // shown in panel title bar
     int         error_count_   = 0;
     int         warning_count_ = 0;
 };
