@@ -27,6 +27,7 @@ file(GLOB_RECURSE SKYSCRIBE_LIB_SOURCES
     "src/compiler/*.cpp" "src/compiler/*.h"
     "src/project/*.cpp"  "src/project/*.h"
     "src/graph/*.cpp"    "src/graph/*.h"
+    "src/codegen/*.cpp"  "src/codegen/*.h"
 )
 add_library(SkyscribeLib STATIC ${SKYSCRIBE_LIB_SOURCES})
 target_include_directories(SkyscribeLib PUBLIC

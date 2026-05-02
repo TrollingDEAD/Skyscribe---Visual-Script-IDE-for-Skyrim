@@ -8,6 +8,18 @@
 
 namespace graph {
 
+// ── Property definition (task 3.11) ──────────────────────────────────────────
+
+enum class PropertyKind { Auto, AutoReadOnly, Conditional };
+
+struct PropertyDefinition {
+    std::string  name;
+    PinType      type          = PinType::Unknown;
+    PropertyKind kind          = PropertyKind::Auto;
+    std::string  default_value;
+    std::string  tooltip;
+};
+
 // ── Runtime instances ─────────────────────────────────────────────────────────
 //
 // Pin IDs are computed deterministically:
@@ -40,10 +52,11 @@ struct Connection {
 // ── Graph ─────────────────────────────────────────────────────────────────────
 
 struct ScriptGraph {
-    std::string              script_name;
-    std::string              extends;
-    std::vector<ScriptNode>  nodes;
-    std::vector<Connection>  connections;
+    std::string                     script_name;
+    std::string                     extends;
+    std::vector<ScriptNode>         nodes;
+    std::vector<Connection>         connections;
+    std::vector<PropertyDefinition> properties;
 
     uint64_t next_node_id = 1; // monotonically increasing; never reused
     uint64_t next_conn_id = 1;

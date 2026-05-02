@@ -7,8 +7,10 @@
 #include "ui/OutputPanel.h"
 #include "ui/SettingsModal.h"
 #include "ui/NewProjectDialog.h"
+#include "codegen/DirtyFlag.h"
 
 #include <imgui.h>
+#include <string>
 
 namespace ui {
 
@@ -45,6 +47,11 @@ private:
 
     // Compile trigger state
     bool trigger_compile_   = false;
+
+    // Codegen state
+    codegen::DirtyFlag codegen_dirty_; // starts dirty
+    int  last_codegen_script_idx_ = -1;
+    int  last_script_node_count_  = -1;
 
     // Modals
     bool show_no_ck_modal_           = false;

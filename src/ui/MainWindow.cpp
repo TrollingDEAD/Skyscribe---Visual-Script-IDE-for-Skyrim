@@ -3,9 +3,12 @@
 #include "app/Settings.h"
 #include "project/Project.h"
 #include "compiler/CompileSession.h"
+#include "codegen/PapyrusStringBuilder.h"
+#include "codegen/LintPass.h"
 
 #include <imgui_internal.h>
 #include <filesystem>
+#include <fstream>
 
 #include <Windows.h>
 #include <commdlg.h>
@@ -86,6 +89,34 @@ void MainWindow::Render() {
         show_shortcuts_modal_ = true;
     }
 
+    // ── Live codegen for preview ──────────────────────────────────────────────
+    {
+        auto& proj = project::Project::Get();
+        if (proj.IsOpen() && !proj.Scripts().empty()) {
+            int active = proj.ActiveScriptIndex();
+            int node_count = (active >= 0 && active < (int)proj.Scripts().size())
+                ? (int)proj.Scripts()[active].nodes.size() : -1;
+            // Regenerate when: script switched, node count changed, or project dirtied.
+            if (active != last_codegen_script_idx_ ||
+                node_count != last_script_node_count_ ||
+                proj.IsDirty() ||
+                codegen_dirty_.IsSet())
+            {
+                codegen_dirty_.Clear();
+                last_codegen_script_idx_ = active;
+                last_script_node_count_  = node_count;
+
+                if (active >= 0 && active < (int)proj.Scripts().size()) {
+                    const auto& g = proj.Scripts()[active];
+                    auto lint = codegen::LintPass::Run(g);
+                    preview_.SetDiagnostics(lint);
+                    auto gen = codegen::PapyrusStringBuilder::Generate(g);
+                    preview_.SetSource(gen.source);
+                }
+            }
+        }
+    }
+
     // ── Trigger deferred compile ──────────────────────────────────────────────
     if (trigger_compile_) {
         trigger_compile_ = false;
@@ -94,13 +125,26 @@ void MainWindow::Render() {
             show_no_ck_modal_ = true;
             ImGui::OpenPopup("NoCKFound");
         } else {
-            // Phase 1: compile a test script if no project is open
-            std::string script;
-            if (project::Project::Get().IsOpen())
-                script = project::Project::Get().Meta().root_dir + "\\main.psc";
-            else
-                script = "tests\\scripts\\HelloWorld.psc";
-            compiler::CompileSession::Get().StartAsync(script);
+            // Generate .psc source and write to Scripts\Source in the project dir.
+            auto& proj2 = project::Project::Get();
+            std::string script_path;
+            if (proj2.IsOpen() && !proj2.Scripts().empty()) {
+                int active = proj2.ActiveScriptIndex();
+                if (active >= 0 && active < (int)proj2.Scripts().size()) {
+                    const auto& g = proj2.Scripts()[active];
+                    auto gen = codegen::PapyrusStringBuilder::Generate(g);
+                    if (!gen.has_errors) {
+                        std::string src_dir = proj2.Meta().root_dir + "\\Scripts\\Source";
+                        std::filesystem::create_directories(src_dir);
+                        script_path = src_dir + "\\" + g.script_name + ".psc";
+                        std::ofstream f(script_path);
+                        if (f) f << gen.source;
+                    }
+                }
+            }
+            if (script_path.empty())
+                script_path = "tests\\scripts\\HelloWorld.psc";
+            compiler::CompileSession::Get().StartAsync(script_path);
         }
     }
 

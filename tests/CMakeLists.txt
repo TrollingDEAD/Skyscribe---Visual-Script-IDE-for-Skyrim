@@ -8,6 +8,7 @@ add_executable(SkyscribeTests
     test_node_registry.cpp
     test_graph_serializer.cpp
     test_undo_stack.cpp
+    test_codegen.cpp
 )
 
 target_link_libraries(SkyscribeTests PRIVATE

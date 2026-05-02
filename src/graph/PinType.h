@@ -15,9 +15,12 @@ enum class PinType {
 
 // Returns true if a wire from 'from' can connect to 'to'.
 // E.g. Actor → ObjectRef is valid (subtype); Bool → Int is not.
+// Unknown is a wildcard type that accepts any data connection.
 inline bool IsCompatible(PinType from, PinType to) {
     if (from == to) return true;
     if (to == PinType::Exec || from == PinType::Exec) return false;
+    // Unknown is a wildcard — accepts any data type
+    if (from == PinType::Unknown || to == PinType::Unknown) return true;
     // Actor is a subtype of ObjectRef
     if (from == PinType::Actor && to == PinType::ObjectRef) return true;
     // Quest and Form are also subtypes of ObjectRef
