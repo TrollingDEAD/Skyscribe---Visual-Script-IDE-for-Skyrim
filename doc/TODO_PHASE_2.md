@@ -21,10 +21,10 @@ The following Phase 1 outputs are consumed by Phase 2 and must remain stable:
 
 imgui-node-editor (`thedmd/imgui-node-editor`) must be added to vcpkg before any canvas work begins.
 
-- [ ] Add `"imgui-node-editor"` to `vcpkg.json`
-- [ ] Verify `find_package` and `target_link_libraries` in `CMakeLists.txt`
-- [ ] Confirm `#include <imgui_node_editor.h>` compiles in a trivial test file
-- [ ] Acceptance: `cmake --preset release` succeeds with imgui-node-editor linked
+- [x] Add `"imgui-node-editor"` to `vcpkg.json`
+- [x] Verify `find_package` and `target_link_libraries` in `CMakeLists.txt`
+- [x] Confirm `#include <imgui_node_editor.h>` compiles in a trivial test file
+- [x] Acceptance: `cmake --preset release` succeeds with imgui-node-editor linked
 
 ---
 
@@ -34,27 +34,27 @@ imgui-node-editor (`thedmd/imgui-node-editor`) must be added to vcpkg before any
 
 > ROADMAP §18, §80
 
-- [ ] Create `src/graph/NodeDefinition.h`:
+- [x] Create `src/graph/NodeDefinition.h`:
   - `enum class PinKind { Input, Output }`
   - `enum class PinFlow { Execution, Data }`
   - `enum class PapyrusType` — mirrors `PinType` but used in definitions (can alias)
   - `struct PinDefinition { std::string name; PinKind kind; PinFlow flow; PinType type; std::string default_value; std::string tooltip; }`
   - `enum class NodeCategory { Event, ControlFlow, Variable, Math, Debug, Actor, Quest, Utility, Custom }`
   - `struct NodeDefinition { std::string type_id; std::string display_name; NodeCategory category; std::string tooltip; std::string source_script; std::vector<PinDefinition> pins; std::string codegen_template; }`
-- [ ] Create `src/graph/ScriptGraph.h`:
+- [x] Create `src/graph/ScriptGraph.h`:
   - `struct Pin { uint64_t id; std::string name; PinKind kind; PinFlow flow; PinType type; std::string value; }` — runtime pin instance
   - `struct ScriptNode { uint64_t id; std::string type_id; float pos_x, pos_y; std::vector<Pin> pins; }` — runtime node instance
   - `struct Connection { uint64_t id; uint64_t from_pin_id; uint64_t to_pin_id; }`
   - `struct ScriptGraph { std::string script_name; std::string extends; std::vector<ScriptNode> nodes; std::vector<Connection> connections; uint64_t next_node_id = 1; uint64_t next_pin_id = 1; uint64_t next_conn_id = 1; }`
   - Helper methods: `AddNode()`, `RemoveNode()`, `Connect()`, `Disconnect()`, `FindNode()`, `FindPin()`
-- [ ] Create `src/graph/ScriptGraph.cpp` implementing the helpers
-- [ ] **Unit tests** (`tests/test_graph_model.cpp`):
+- [x] Create `src/graph/ScriptGraph.cpp` implementing the helpers
+- [x] **Unit tests** (`tests/test_graph_model.cpp`):
   - Add/remove node updates `next_node_id`; deleted IDs are not reused
   - `Connect` rejects incompatible types via `IsCompatible()`
   - `Connect` rejects Exec→Data and Data→Exec
   - `RemoveNode` also removes all connections to/from that node's pins
   - Round-trip: add 3 nodes, 2 connections, remove middle node → only 0 connections remain
-- [ ] Acceptance: 5+ Catch2 tests pass; model is usable without UI
+- [x] Acceptance: 5+ Catch2 tests pass; model is usable without UI
 
 **Files to create:**
 ```
@@ -70,13 +70,13 @@ tests/test_graph_model.cpp
 
 > ROADMAP §8, §18
 
-- [ ] Create `src/graph/NodeRegistry.h` / `NodeRegistry.cpp`:
+- [x] Create `src/graph/NodeRegistry.h` / `NodeRegistry.cpp`:
   - Singleton `NodeRegistry::Get()`
   - `Register(NodeDefinition)` — adds to internal map keyed by `type_id`
   - `Find(type_id) → const NodeDefinition*`
   - `AllNodes() → const std::vector<NodeDefinition>&` — sorted by category then display name
   - `ByCategory(NodeCategory) → std::vector<const NodeDefinition*>`
-- [ ] Create `src/graph/BuiltinNodes.h` / `BuiltinNodes.cpp`:
+- [x] Create `src/graph/BuiltinNodes.h` / `BuiltinNodes.cpp`:
   - `BuiltinNodes::RegisterAll()` — registers every node from ROADMAP §8 into `NodeRegistry`
   - **Event nodes** (12): `OnInit`, `OnActivate`, `OnLoad`, `OnUnload`, `OnDeath`, `OnHit`, `OnEquipped`, `OnUnequipped`, `OnCombatStateChanged`, `OnTimer`, `OnUpdateGameTime`, `OnStageSet`
   - **Control Flow nodes** (4): `If/Else`, `While Loop`, `Return`, `Sequence`
@@ -86,13 +86,13 @@ tests/test_graph_model.cpp
   - **Actor nodes** (9): `Get Player`, `Get Form By ID`, `Apply Spell`, `Remove Spell`, `Is Dead`, `Get Level`, `Resurrect`, `Get Actor Value`, `Set Actor Value`
   - **Quest/Story nodes** (5): `Set Stage`, `Get Stage`, `Is Stage Done`, `Complete Quest`, `Start Quest`
   - **Utility/Timer nodes** (6): `Start Timer`, `Cancel Timer`, `Start Timer (Game Time)`, `Wait`, `Random Int`, `Random Float`
-- [ ] Call `BuiltinNodes::RegisterAll()` from `Application::Init()` before any UI renders
-- [ ] **Unit tests** (`tests/test_node_registry.cpp`):
+- [x] Call `BuiltinNodes::RegisterAll()` from `Application::Init()` before any UI renders
+- [x] **Unit tests** (`tests/test_node_registry.cpp`):
   - Total registered node count matches expected (61 built-ins)
   - `Find("builtin.OnInit")` returns non-null with correct `display_name` and `category`
   - `ByCategory(NodeCategory::Event)` returns exactly 12 nodes
   - `AllNodes()` is sorted: Events come before ControlFlow
-- [ ] Acceptance: 4+ tests pass; all §8 nodes registered at startup
+- [x] Acceptance: 4+ tests pass; all §8 nodes registered at startup
 
 **Files to create:**
 ```
@@ -109,8 +109,8 @@ tests/test_node_registry.cpp
 
 > ROADMAP §2.2, §2.3, §80 (pin IDs)
 
-- [ ] Pin IDs are computed deterministically: `pin_id = (node_id << 16) | pin_index` — fits in `uint64_t`; no separate counter needed
-- [ ] `ScriptGraph::Connect()` enforces at the model level:
+- [x] Pin IDs are computed deterministically: `pin_id = (node_id << 16) | pin_index` — fits in `uint64_t`; no separate counter needed
+- [x] `ScriptGraph::Connect()` enforces at the model level:
   - Both pins must exist (valid `pin_id`)
   - `from` pin must be `PinKind::Output`; `to` pin must be `PinKind::Input`
   - Both must have the same `PinFlow` (Execution↔Execution or Data↔Data)
@@ -118,15 +118,15 @@ tests/test_node_registry.cpp
   - A Data input pin may only have **one** incoming connection (replace existing on reconnect)
   - An Execution output pin may fan-out to multiple inputs
   - Returns `bool` (false = rejected); logs rejection reason via `LOG_WARN`
-- [ ] `ScriptGraph::CanConnect(from_pin_id, to_pin_id) → bool` — same checks without mutating state; used by UI for hover feedback
-- [ ] **Unit tests** in `test_graph_model.cpp`:
+- [x] `ScriptGraph::CanConnect(from_pin_id, to_pin_id) → bool` — same checks without mutating state; used by UI for hover feedback
+- [x] **Unit tests** in `test_graph_model.cpp`:
   - Exec→Data rejected
   - Data→Exec rejected
   - Bool→Int rejected
   - Actor→ObjectRef accepted
   - Data input pin: second connection replaces first
   - Exec output pin: connects to two inputs successfully
-- [ ] Acceptance: all connection-rule tests pass; `CanConnect` agrees with `Connect`
+- [x] Acceptance: all connection-rule tests pass; `CanConnect` agrees with `Connect`
 
 ---
 
@@ -134,7 +134,7 @@ tests/test_node_registry.cpp
 
 > ROADMAP §28 (Canvas UX)
 
-- [ ] Update `src/ui/GraphEditorPanel.h` / `GraphEditorPanel.cpp` (replace existing stub):
+- [x] Update `src/ui/GraphEditorPanel.h` / `GraphEditorPanel.cpp` (replace existing stub):
   - Hold an `ax::NodeEditor::EditorContext*` created/destroyed with the panel
   - `Render(ScriptGraph& graph)` — called each frame; renders all nodes and connections
   - Node rendering:
@@ -145,14 +145,14 @@ tests/test_node_registry.cpp
   - Connection rendering: wires use `PinColor()` of the source pin
   - `BeginCreate` / `EndCreate` handling — validates connection via `ScriptGraph::CanConnect()`; creates if valid; shows red X cursor if invalid
   - `BeginDelete` / `EndDelete` handling — removes nodes and connections from graph
-- [ ] Canvas interactions (provided by imgui-node-editor):
+- [x] Canvas interactions (provided by imgui-node-editor):
   - Middle-mouse drag / Alt+drag → pan
   - Scroll wheel → zoom (clamp: 10% – 400%)
   - `F` → frame all nodes (`NavigateToContent`)
   - `Shift+F` → frame selection (`NavigateToSelection`)
-- [ ] Rubber-band multi-select (built into imgui-node-editor)
-- [ ] Node placement: `ScriptGraph::AddNode()` called with position from canvas right-click (wired in 2.11)
-- [ ] Acceptance: nodes render with correct colours; wires connect and disconnect; zoom/pan works; frame-all frames all nodes
+- [x] Rubber-band multi-select (built into imgui-node-editor)
+- [x] Node placement: `ScriptGraph::AddNode()` called with position from canvas right-click (wired in 2.11)
+- [x] Acceptance: nodes render with correct colours; wires connect and disconnect; zoom/pan works; frame-all frames all nodes
 
 **Files to modify:**
 ```
@@ -166,22 +166,22 @@ src/ui/GraphEditorPanel.cpp
 
 > ROADMAP §24
 
-- [ ] Update `src/ui/ToolPalettePanel.h` / `ToolPalettePanel.cpp` (replace existing stub):
+- [x] Update `src/ui/ToolPalettePanel.h` / `ToolPalettePanel.cpp` (replace existing stub):
   - Queries `NodeRegistry::Get()` for all nodes
   - Collapsible category sections using `ImGui::TreeNodeEx` with category header colour
   - Category expand/collapse state persisted in `Settings` under `ui.palette_state` (map of category→bool)
   - Each node entry shows `display_name`; hovering shows tooltip from `NodeDefinition::tooltip`
-- [ ] Live search filter:
+- [x] Live search filter:
   - `ImGui::InputText` at the top; filters on every keypress (no Enter required)
   - Matches on `display_name`, `category` name, `source_script`
   - When search is active: flat list (no category headers); matched substring bold-highlighted
   - Zero results: show `"No nodes match '<query>'"` message
   - Search cleared when canvas tab switches
-- [ ] Drag-and-drop from palette to canvas:
+- [x] Drag-and-drop from palette to canvas:
   - `ImGui::BeginDragDropSource` on each node entry
   - Payload: `type_id` string
   - Canvas accepts `ImGui::BeginDragDropTarget`; calls `ScriptGraph::AddNode()` at drop position
-- [ ] Acceptance: all 61 built-in nodes visible; collapse/expand works; search filters correctly; drag-to-canvas places node
+- [x] Acceptance: all 61 built-in nodes visible; collapse/expand works; search filters correctly; drag-to-canvas places node
 
 **Files to modify:**
 ```
@@ -195,7 +195,7 @@ src/ui/ToolPalettePanel.cpp
 
 > ROADMAP §17 (JSON Mirror Format), §81
 
-- [ ] Create `src/graph/GraphSerializer.h` / `GraphSerializer.cpp`:
+- [x] Create `src/graph/GraphSerializer.h` / `GraphSerializer.cpp`:
   - `GraphSerializer::Save(const ScriptGraph&) → nlohmann::json`
   - `GraphSerializer::Load(const nlohmann::json&) → ScriptGraph`
   - JSON schema per ROADMAP §17:
@@ -215,15 +215,15 @@ src/ui/ToolPalettePanel.cpp
     ```
   - Missing/unknown `type_id` on load → log warning, skip node (forward-compatibility)
   - Pin `value` field stores default value overrides (e.g. Literal Int node's constant)
-- [ ] Integrate into `Project::Save()` / `Project::Load()`:
+- [x] Integrate into `Project::Save()` / `Project::Load()`:
   - `Project` stores `std::vector<ScriptGraph> scripts`
   - Each script serialized under `"scripts"` array in `.skyscribe` JSON
-- [ ] **Unit tests** (`tests/test_graph_serializer.cpp`):
+- [x] **Unit tests** (`tests/test_graph_serializer.cpp`):
   - Round-trip: build graph with 3 nodes + 2 connections → `Save()` → `Load()` → identical graph
   - `Load()` with unknown `type_id` skips node without crashing
   - `next_node_id` is restored correctly so subsequent `AddNode()` never reuses an ID
   - Empty graph serializes and deserializes cleanly
-- [ ] Acceptance: 4+ tests pass; save → close → reload = identical graph state
+- [x] Acceptance: 4+ tests pass; save → close → reload = identical graph state
 
 **Files to create:**
 ```
@@ -238,7 +238,7 @@ tests/test_graph_serializer.cpp
 
 > ROADMAP §23, §28
 
-- [ ] Create `src/graph/UndoStack.h` / `UndoStack.cpp`:
+- [x] Create `src/graph/UndoStack.h` / `UndoStack.cpp`:
   - `struct ICommand { virtual void Execute(ScriptGraph&) = 0; virtual void Undo(ScriptGraph&) = 0; virtual std::string Description() const = 0; }`
   - Concrete commands (all value-copy — no raw pointers into live graph):
     - `AddNodeCmd { ScriptNode snapshot; }`
@@ -255,14 +255,14 @@ tests/test_graph_serializer.cpp
   - `UndoStack::CanUndo() / CanRedo() → bool`
   - `UndoStack::UndoDescription() / RedoDescription() → std::string`
   - `UndoStack::Clear()` — called on project close
-- [ ] Wire `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` in `MainWindow::Render()` hotkey block
-- [ ] All graph mutations in `GraphEditorPanel` (create/delete via imgui-node-editor callbacks) push commands through `UndoStack`
-- [ ] **Unit tests** (`tests/test_undo_stack.cpp`):
+- [x] Wire `Ctrl+Z` / `Ctrl+Y` / `Ctrl+Shift+Z` in `MainWindow::Render()` hotkey block
+- [x] All graph mutations in `GraphEditorPanel` (create/delete via imgui-node-editor callbacks) push commands through `UndoStack`
+- [x] **Unit tests** (`tests/test_undo_stack.cpp`):
   - Add node → undo → graph empty; redo → node back
   - Connect → undo → connection gone; redo → reconnected
   - 101 pushes → history capped at 100; oldest entry gone
   - `MacroCmd`: add 3 nodes as macro → single undo removes all 3
-- [ ] Acceptance: 4+ tests pass; Ctrl+Z/Y correct for all command types
+- [x] Acceptance: 4+ tests pass; Ctrl+Z/Y correct for all command types
 
 **Files to create:**
 ```
@@ -277,13 +277,13 @@ tests/test_undo_stack.cpp
 
 > ROADMAP §10
 
-- [ ] Update `src/project/Project.h` / `Project.cpp`:
+- [x] Update `src/project/Project.h` / `Project.cpp`:
   - `Project` holds `std::vector<ScriptGraph> scripts`
   - `AddScript(name, extends) → ScriptGraph&`
   - `RemoveScript(index)`
   - `RenameScript(index, new_name)`
   - Dirty flag set on any of the above
-- [ ] Create `src/ui/ProjectPanel.h` / `ProjectPanel.cpp`:
+- [x] Create `src/ui/ProjectPanel.h` / `ProjectPanel.cpp`:
   - Dockable ImGui panel, label `"Project"`
   - Lists all scripts in current project with name and `extends` type
   - `[+ New Script]` button → opens inline name/extends dialog → calls `Project::AddScript()`
@@ -291,16 +291,16 @@ tests/test_undo_stack.cpp
   - Delete button (🗑) with confirmation tooltip (`"Hold Shift to delete"`)
   - Clicking a script activates its canvas tab (wired to `GraphEditorPanel`)
   - Active script highlighted
-- [ ] Canvas tab bar in `GraphEditorPanel`:
+- [x] Canvas tab bar in `GraphEditorPanel`:
   - One `ImGui::BeginTabBar` tab per script
   - Clicking a tab switches the active `ScriptGraph*`
   - Tab close button triggers "unsaved changes?" check if dirty
   - New tabs added when `Project::AddScript()` is called
-- [ ] **Script Identity Bar** at top of each canvas (per ROADMAP §12):
+- [x] **Script Identity Bar** at top of each canvas (per ROADMAP §12):
   - `ScriptName` text input — alphanumeric + `_` only; spaces auto-converted to `_`; max 128 chars
   - `Extends` combo/text field — dropdown populated from built-in type hierarchy (Form, ObjectReference, Actor, Quest, Weapon, Armor, Spell, MagicEffect, ActiveMagicEffect, Activator, Container, Door); free-text for custom types
   - Changes push `RenameScriptCmd` / `SetExtendsCmd` to `UndoStack`
-- [ ] Acceptance: create 3 scripts; switch between them; rename one; delete one; all persists through save/reload
+- [x] Acceptance: create 3 scripts; switch between them; rename one; delete one; all persists through save/reload
 
 **Files to create / modify:**
 ```
@@ -316,10 +316,10 @@ src/ui/GraphEditorPanel.h/.cpp  ← add tab bar + identity bar
 
 > ROADMAP §24 (Palette Implementation Notes)
 
-- [ ] Add `std::map<std::string, bool> palette_category_expanded` to `Settings`
-- [ ] Serialize under `"ui"."palette_state"` in `config.json`
-- [ ] `ToolPalettePanel` reads/writes this map on category toggle
-- [ ] Acceptance: collapse Events category, restart app — Events is still collapsed
+- [x] Add `std::map<std::string, bool> palette_category_expanded` to `Settings`
+- [x] Serialize under `"ui"."palette_state"` in `config.json`
+- [x] `ToolPalettePanel` reads/writes this map on category toggle
+- [x] Acceptance: collapse Events category, restart app — Events is still collapsed
 
 ---
 
@@ -327,12 +327,12 @@ src/ui/GraphEditorPanel.h/.cpp  ← add tab bar + identity bar
 
 > ROADMAP §24 (Canvas Right-Click Node Picker)
 
-- [ ] Right-click on blank canvas space opens a floating `ImGui::BeginPopup("##node_picker")`
-- [ ] Auto-focused search `InputText`; pre-populated with all nodes
-- [ ] Node list filtered live; category breadcrumb shown next to each result
-- [ ] Selecting a node closes popup, calls `ScriptGraph::AddNode()` at right-click canvas position, pushes `AddNodeCmd`
-- [ ] ESC closes without placing
-- [ ] Acceptance: right-click → type "notify" → `Debug.Notification` appears → select → node placed at cursor
+- [x] Right-click on blank canvas space opens a floating `ImGui::BeginPopup("##node_picker")`
+- [x] Auto-focused search `InputText`; pre-populated with all nodes
+- [x] Node list filtered live; category breadcrumb shown next to each result
+- [x] Selecting a node closes popup, calls `ScriptGraph::AddNode()` at right-click canvas position, pushes `AddNodeCmd`
+- [x] ESC closes without placing
+- [x] Acceptance: right-click → type "notify" → `Debug.Notification` appears → select → node placed at cursor
 
 ---
 
@@ -340,10 +340,10 @@ src/ui/GraphEditorPanel.h/.cpp  ← add tab bar + identity bar
 
 > ROADMAP §24 (Pin-Drag Contextual Filter)
 
-- [ ] When user drags a wire from an output pin and releases on blank canvas space, open node picker
-- [ ] Picker pre-filtered to nodes that have at least one compatible input pin for the dragged type
-- [ ] Selecting a node places it and auto-connects the compatible pin
-- [ ] Acceptance: drag from `Actor` output pin → picker shows only nodes with `Actor` or `ObjectRef` input pins → select → node placed and connected
+- [x] When user drags a wire from an output pin and releases on blank canvas space, open node picker
+- [x] Picker pre-filtered to nodes that have at least one compatible input pin for the dragged type
+- [x] Selecting a node places it and auto-connects the compatible pin
+- [x] Acceptance: drag from `Actor` output pin → picker shows only nodes with `Actor` or `ObjectRef` input pins → select → node placed and connected
 
 ---
 
@@ -351,16 +351,16 @@ src/ui/GraphEditorPanel.h/.cpp  ← add tab bar + identity bar
 
 > ROADMAP §27
 
-- [ ] Create `src/graph/ClipboardPayload.h`:
+- [x] Create `src/graph/ClipboardPayload.h`:
   - `struct ClipboardPayload { std::vector<ScriptNode> nodes; std::vector<Connection> internal_connections; }`
   - Only connections where **both** endpoints are in the copied selection are included
-- [ ] `GraphEditorPanel`:
+- [x] `GraphEditorPanel`:
   - `Ctrl+C` — copy selected nodes + internal connections to `ClipboardPayload`
   - `Ctrl+X` — same as copy + `RemoveNodeCmd` (via `MacroCmd`) for each selected node
   - `Ctrl+V` — assign new IDs to all pasted nodes/pins; offset positions `+40, +40`; push `MacroCmd(AddNodeCmd × N + ConnectCmd × M)` to undo stack
   - `Ctrl+D` — duplicate without clipboard write; immediate paste with offset
   - Repeated `Ctrl+V` adds additional `+40, +40` offset per paste; offset resets on new copy
-- [ ] Acceptance: copy 2 connected nodes → paste → 2 new nodes with same connection; undo removes both
+- [x] Acceptance: copy 2 connected nodes → paste → 2 new nodes with same connection; undo removes both
 
 ---
 
@@ -368,24 +368,24 @@ src/ui/GraphEditorPanel.h/.cpp  ← add tab bar + identity bar
 
 > ROADMAP §28 (Node Right-Click)
 
-- [ ] Right-clicking a **node** opens node context menu (not the canvas picker):
+- [x] Right-clicking a **node** opens node context menu (not the canvas picker):
   - Cut / Copy / Duplicate / Delete
   - **Align** submenu (visible only when ≥ 2 nodes selected):
     - Left edges, Right edges, Top edges, Bottom edges
     - Centre horizontal, Centre vertical
     - Distribute H, Distribute V
-- [ ] All alignment operations produce a `MacroCmd` of `MoveNodeCmd`s — fully undoable
-- [ ] Acceptance: select 3 nodes → right-click → Align → Left edges → all left edges match leftmost; Ctrl+Z restores original positions
+- [x] All alignment operations produce a `MacroCmd` of `MoveNodeCmd`s — fully undoable
+- [x] Acceptance: select 3 nodes → right-click → Align → Left edges → all left edges match leftmost; Ctrl+Z restores original positions
 
 ---
 
 ### 2.14 — Project Panel wired into MainWindow layout `P0`
 
-- [ ] Add `ProjectPanel project_panel_` member to `MainWindow`
-- [ ] Dock `"Project"` panel into the default layout (left column, below Tool Palette, or replace it)
+- [x] Add `ProjectPanel project_panel_` member to `MainWindow`
+- [x] Dock `"Project"` panel into the default layout (left column, below Tool Palette, or replace it)
   - Update `BuildDefaultLayout()` to split `dock_palette` into palette (top ~50%) + project (bottom ~50%)
-- [ ] Add `project_panel_.Render()` call in `MainWindow::Render()`
-- [ ] Acceptance: Project panel visible in default layout; shows current project's script list
+- [x] Add `project_panel_.Render()` call in `MainWindow::Render()`
+- [x] Acceptance: Project panel visible in default layout; shows current project's script list
 
 ---
 
@@ -417,13 +417,13 @@ tests/
 
 ## Definition of Done
 
-- [ ] `cmake --preset release` builds with zero errors and zero warnings
-- [ ] All new unit tests pass (`ctest --preset release`): graph model (≥5), node registry (≥4), serializer (≥4), undo stack (≥4)
-- [ ] All 61 built-in nodes (§8 ROADMAP) are registered and visible in the Tool Palette
-- [ ] Nodes can be placed on canvas via palette drag-drop and right-click picker
-- [ ] Typed pin connections enforce `IsCompatible()` — invalid wires rejected at UI level
-- [ ] Graph save → close → reload produces an identical graph state
-- [ ] Undo/redo works for: add node, delete node, connect, disconnect, move node, paste
-- [ ] Multi-script project: create 3 scripts, switch between canvases, rename, delete — all persists
-- [ ] Script Identity Bar: `ScriptName` and `Extends` editable per canvas; changes are undoable
-- [ ] Canvas zoom/pan, frame-all (`F`), rubber-band select all function correctly
+- [x] `cmake --preset release` builds with zero errors and zero warnings
+- [x] All new unit tests pass (`ctest --preset release`): graph model (≥5), node registry (≥4), serializer (≥4), undo stack (≥4)
+- [x] All 61 built-in nodes (§8 ROADMAP) are registered and visible in the Tool Palette
+- [x] Nodes can be placed on canvas via palette drag-drop and right-click picker
+- [x] Typed pin connections enforce `IsCompatible()` — invalid wires rejected at UI level
+- [x] Graph save → close → reload produces an identical graph state
+- [x] Undo/redo works for: add node, delete node, connect, disconnect, move node, paste
+- [x] Multi-script project: create 3 scripts, switch between canvases, rename, delete — all persists
+- [x] Script Identity Bar: `ScriptName` and `Extends` editable per canvas; changes are undoable
+- [x] Canvas zoom/pan, frame-all (`F`), rubber-band select all function correctly
