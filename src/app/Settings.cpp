@@ -35,6 +35,7 @@ void Settings::Load(const std::string& config_path) {
         autosave_enabled    = j.value("autosave_enabled",    true);
         autosave_interval_s = j.value("autosave_interval_s", 300);
 
+
         if (j.contains("window")) {
             const auto& w = j["window"];
             window_x = w.value("x", -1);

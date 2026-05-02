@@ -6,10 +6,24 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 namespace codegen {
+
+namespace {
+bool g_emit_source_comments = false;
+bool g_indent_tabs = false;
+}
+
+void PapyrusStringBuilder::SetEmitSourceComments(bool enabled) {
+    g_emit_source_comments = enabled;
+}
+
+void PapyrusStringBuilder::SetIndentWithTabs(bool enabled) {
+    g_indent_tabs = enabled;
+}
 
 // ─── Type helpers ─────────────────────────────────────────────────────────────
 
@@ -44,16 +58,24 @@ static std::string DefaultLiteralForType(graph::PinType t) {
 
 // ─── Data-flow resolution ─────────────────────────────────────────────────────
 
+struct EmitContext {
+    int next_temp_index = 0;
+    std::unordered_map<uint64_t, std::string> temp_for_output_pin;
+    std::vector<std::string> temp_decls;
+};
+
 // Forward declarations
 static std::string SubstituteTemplate(const graph::ScriptGraph& g,
                                        uint64_t node_id,
                                        const std::string& tmpl,
-                                       std::unordered_set<uint64_t>& resolving);
+                                       std::unordered_set<uint64_t>& resolving,
+                                       EmitContext* ctx);
 
 // Resolve the expression produced by a specific data-output pin (from_pin_id).
 static std::string ResolveOutput(const graph::ScriptGraph& g,
                                   uint64_t from_pin_id,
-                                  std::unordered_set<uint64_t>& resolving) {
+                                  std::unordered_set<uint64_t>& resolving,
+                                  EmitContext* ctx) {
     uint64_t src_id = graph::PinOwnerNodeId(from_pin_id);
     if (resolving.count(src_id)) return "None"; // cycle guard
 
@@ -67,7 +89,21 @@ static std::string ResolveOutput(const graph::ScriptGraph& g,
     }
 
     if (!def->codegen_template.empty()) {
-        return SubstituteTemplate(g, src_id, def->codegen_template, resolving);
+        // 3.2: math/logic expression nodes are hoisted to temp vars per block.
+        if (ctx && def->category == graph::NodeCategory::Math) {
+            auto it = ctx->temp_for_output_pin.find(from_pin_id);
+            if (it != ctx->temp_for_output_pin.end())
+                return it->second;
+
+            std::string expr = SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
+            std::string temp_name = "_t" + std::to_string(ctx->next_temp_index++);
+            const graph::Pin* out_pin = g.FindPin(from_pin_id);
+            const std::string type_name = out_pin ? PapyrusTypeName(out_pin->type) : "Auto";
+            ctx->temp_for_output_pin[from_pin_id] = temp_name;
+            ctx->temp_decls.push_back(type_name + " " + temp_name + " = " + expr);
+            return temp_name;
+        }
+        return SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
     }
 
     // No template: event parameter nodes or GetVariable-style nodes.
@@ -81,7 +117,8 @@ static std::string ResolveOutput(const graph::ScriptGraph& g,
 static std::string SubstituteTemplate(const graph::ScriptGraph& g,
                                        uint64_t node_id,
                                        const std::string& tmpl,
-                                       std::unordered_set<uint64_t>& resolving) {
+                                       std::unordered_set<uint64_t>& resolving,
+                                       EmitContext* ctx) {
     resolving.insert(node_id);
     std::string out;
     out.reserve(tmpl.size());
@@ -108,7 +145,7 @@ static std::string SubstituteTemplate(const graph::ScriptGraph& g,
                             bool connected = false;
                             for (const auto& conn : g.connections) {
                                 if (conn.to_pin_id == pin.id) {
-                                    resolved = ResolveOutput(g, conn.from_pin_id, resolving);
+                                    resolved = ResolveOutput(g, conn.from_pin_id, resolving, ctx);
                                     connected = true;
                                     break;
                                 }
@@ -157,17 +194,26 @@ static std::string SubstituteTemplate(const graph::ScriptGraph& g,
 
 // Forward declarations
 static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
-                           const std::string& indent, std::ostream& out);
+                           const std::string& indent,
+                           const std::string& indent_unit,
+                           EmitContext& ctx,
+                           std::ostream& out);
 
 static void EmitBranch(const graph::ScriptGraph& g, uint64_t exec_out_pin_id,
-                        const std::string& indent, std::ostream& out) {
+                        const std::string& indent,
+                        const std::string& indent_unit,
+                        EmitContext& ctx,
+                        std::ostream& out) {
     auto result = GraphTraversal::Traverse(g, exec_out_pin_id);
     for (uint64_t nid : result.node_ids)
-        EmitStatement(g, nid, indent, out);
+        EmitStatement(g, nid, indent, indent_unit, ctx, out);
 }
 
 static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
-                           const std::string& indent, std::ostream& out) {
+                           const std::string& indent,
+                           const std::string& indent_unit,
+                           EmitContext& ctx,
+                           std::ostream& out) {
     const graph::ScriptNode* node = g.FindNode(node_id);
     if (!node) return;
     const graph::NodeDefinition* def = graph::NodeRegistry::Get().Find(node->type_id);
@@ -184,7 +230,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
                 bool connected = false;
                 for (const auto& conn : g.connections) {
                     if (conn.to_pin_id == pin.id) {
-                        cond = ResolveOutput(g, conn.from_pin_id, res);
+                        cond = ResolveOutput(g, conn.from_pin_id, res, &ctx);
                         connected = true; break;
                     }
                 }
@@ -198,7 +244,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
         uint64_t true_pin  = GraphTraversal::FindExecOutPin(g, node_id, "True");
         uint64_t false_pin = GraphTraversal::FindExecOutPin(g, node_id, "False");
 
-        if (true_pin)  EmitBranch(g, true_pin, indent + "    ", out);
+        if (true_pin)  EmitBranch(g, true_pin, indent + indent_unit, indent_unit, ctx, out);
 
         // Only emit Else if the False branch is connected
         bool false_used = false;
@@ -208,7 +254,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
         }
         if (false_used) {
             out << indent << "Else\n";
-            EmitBranch(g, false_pin, indent + "    ", out);
+            EmitBranch(g, false_pin, indent + indent_unit, indent_unit, ctx, out);
         }
         out << indent << "EndIf\n";
         return;
@@ -224,7 +270,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
                 bool connected = false;
                 for (const auto& conn : g.connections) {
                     if (conn.to_pin_id == pin.id) {
-                        cond = ResolveOutput(g, conn.from_pin_id, res);
+                        cond = ResolveOutput(g, conn.from_pin_id, res, &ctx);
                         connected = true; break;
                     }
                 }
@@ -236,7 +282,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
         out << indent << "While (" << cond << ")\n";
 
         uint64_t body_pin = GraphTraversal::FindExecOutPin(g, node_id, "Loop Body");
-        if (body_pin) EmitBranch(g, body_pin, indent + "    ", out);
+        if (body_pin) EmitBranch(g, body_pin, indent + indent_unit, indent_unit, ctx, out);
 
         out << indent << "EndWhile\n";
         return;
@@ -246,14 +292,38 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
     if (node->type_id == "builtin.Sequence") {
         for (const auto& pin : node->pins) {
             if (pin.flow == graph::PinFlow::Execution && pin.kind == graph::PinKind::Output)
-                EmitBranch(g, pin.id, indent, out);
+                EmitBranch(g, pin.id, indent, indent_unit, ctx, out);
         }
         return;
     }
 
     // ── Return ─────────────────────────────────────────────────────────────
     if (node->type_id == "builtin.Return") {
-        out << indent << "Return\n";
+        std::string resolved;
+        bool has_value_pin = false;
+        for (const auto& pin : node->pins) {
+            if (pin.name == "Value" &&
+                pin.flow == graph::PinFlow::Data &&
+                pin.kind == graph::PinKind::Input) {
+                has_value_pin = true;
+                bool connected = false;
+                std::unordered_set<uint64_t> res;
+                for (const auto& conn : g.connections) {
+                    if (conn.to_pin_id == pin.id) {
+                        resolved = ResolveOutput(g, conn.from_pin_id, res, &ctx);
+                        connected = true;
+                        break;
+                    }
+                }
+                if (!connected)
+                    resolved = pin.value.empty() ? DefaultLiteralForType(pin.type) : pin.value;
+                break;
+            }
+        }
+        if (has_value_pin)
+            out << indent << "Return " << resolved << "\n";
+        else
+            out << indent << "Return\n";
         return;
     }
 
@@ -265,7 +335,7 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
     // ── General statement with codegen_template ────────────────────────────
     if (!def->codegen_template.empty()) {
         std::unordered_set<uint64_t> res;
-        std::string stmt = SubstituteTemplate(g, node_id, def->codegen_template, res);
+        std::string stmt = SubstituteTemplate(g, node_id, def->codegen_template, res, &ctx);
         out << indent << stmt << "\n";
     }
 }
@@ -349,6 +419,7 @@ static std::string EventHeader(const graph::ScriptNode& event_node,
 
 static void EmitEventBody(const graph::ScriptGraph& g,
                            uint64_t event_node_id,
+                           const std::string& indent_unit,
                            std::ostream& out) {
     const graph::ScriptNode* event_node = g.FindNode(event_node_id);
     if (!event_node) return;
@@ -376,11 +447,18 @@ static void EmitEventBody(const graph::ScriptGraph& g,
         for (const auto& p : ln->pins) {
             if (p.name == "Ref" && !p.value.empty()) { var_name = p.value; break; }
         }
-        out << "    Auto " << var_name << "\n";
+        out << indent_unit << "Auto " << var_name << "\n";
     }
 
-    // Emit exec-flow statements
-    if (exec_pin) EmitBranch(g, exec_pin, "    ", out);
+    EmitContext ctx;
+    std::ostringstream body_out;
+    if (exec_pin) EmitBranch(g, exec_pin, indent_unit, indent_unit, ctx, body_out);
+
+    // Emit hoisted temp declarations generated while resolving math/logic chains.
+    for (const auto& decl : ctx.temp_decls)
+        out << indent_unit << decl << "\n";
+
+    out << body_out.str();
 }
 
 // ─── Property emission ────────────────────────────────────────────────────────
@@ -409,6 +487,7 @@ static void EmitProperties(const graph::ScriptGraph& g, std::ostream& out) {
 
 PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptGraph& g) {
     Result result;
+    const std::string indent_unit = g_indent_tabs ? "\t" : "    ";
 
     // ── Edge cases ────────────────────────────────────────────────────────────
     if (g.script_name.empty()) {
@@ -425,6 +504,9 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
     out << "Scriptname " << g.script_name;
     if (!g.extends.empty()) out << " extends " << g.extends;
     out << "\n";
+
+    if (g_emit_source_comments)
+        out << "; Generated by Skyscribe\n";
 
     // ── Import statements (task 3.17) ─────────────────────────────────────────
     {
@@ -465,7 +547,7 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
             auto entry_id_str = "script." + g.script_name + ".entry." + func.name;
             for (const auto& sn : func.body_graph->nodes) {
                 if (sn.type_id == entry_id_str) {
-                    EmitEventBody(*func.body_graph, sn.id, out);
+                    EmitEventBody(*func.body_graph, sn.id, indent_unit, out);
                     break;
                 }
             }
@@ -487,7 +569,7 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
         if (!def) continue;
 
         out << EventHeader(*en, *def) << "\n";
-        EmitEventBody(g, eid, out);
+        EmitEventBody(g, eid, indent_unit, out);
         out << "EndEvent\n\n";
     }
 

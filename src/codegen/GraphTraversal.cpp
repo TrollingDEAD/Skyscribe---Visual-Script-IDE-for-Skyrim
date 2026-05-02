@@ -1,6 +1,8 @@
 #include "codegen/GraphTraversal.h"
 #include "graph/NodeRegistry.h"
 
+#include <functional>
+#include <string>
 #include <unordered_set>
 
 namespace codegen {
@@ -17,6 +19,17 @@ static uint64_t NextExecNode(const graph::ScriptGraph& g, uint64_t exec_out_pin_
     return 0;
 }
 
+// Follow an exec-OUT pin and collect every reachable next node (usually 0 or 1).
+static std::vector<uint64_t> NextExecNodes(const graph::ScriptGraph& g,
+                                           uint64_t exec_out_pin_id) {
+    std::vector<uint64_t> out;
+    for (const auto& conn : g.connections) {
+        if (conn.from_pin_id == exec_out_pin_id)
+            out.push_back(graph::PinOwnerNodeId(conn.to_pin_id));
+    }
+    return out;
+}
+
 // Returns the first exec-OUT pin id of a node whose output is an exec pin
 // (used to start traversal from an Event node).
 static uint64_t FirstExecOutPin(const graph::ScriptNode& node) {
@@ -25,6 +38,27 @@ static uint64_t FirstExecOutPin(const graph::ScriptNode& node) {
             return p.id;
     }
     return 0;
+}
+
+static std::string DefaultLiteralForType(graph::PinType t) {
+    using graph::PinType;
+    switch (t) {
+    case PinType::Bool:  return "False";
+    case PinType::Int:   return "0";
+    case PinType::Float: return "0.0";
+    case PinType::String:return "\"\"";
+    case PinType::Actor:
+    case PinType::ObjectRef:
+    case PinType::Form:
+    case PinType::Quest:
+    case PinType::Array_Bool:
+    case PinType::Array_Int:
+    case PinType::Array_Float:
+    case PinType::Array_String:
+    case PinType::Array_ObjectRef:
+    case PinType::Unknown:
+    default:             return "None";
+    }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -89,6 +123,130 @@ TraversalResult GraphTraversal::Traverse(const graph::ScriptGraph& g,
         if (next_exec_out == 0) break; // no exec-out (e.g. Return node)
         next_node = NextExecNode(g, next_exec_out);
     }
+
+    return result;
+}
+
+TraversalResult GraphTraversal::TraverseDfs(const graph::ScriptGraph& g,
+                                             uint64_t start_exec_out_pin_id) {
+    TraversalResult result;
+    std::unordered_set<uint64_t> visited;
+    std::unordered_set<uint64_t> in_stack;
+
+    std::function<std::string(uint64_t, std::unordered_set<uint64_t>&)> resolve_output;
+    resolve_output = [&](uint64_t output_pin_id,
+                         std::unordered_set<uint64_t>& resolving) -> std::string {
+        const graph::Pin* p = g.FindPin(output_pin_id);
+        if (!p) return "None";
+        if (!p->value.empty()) return p->value;
+
+        uint64_t src_node_id = graph::PinOwnerNodeId(output_pin_id);
+        if (resolving.count(src_node_id)) {
+            return "_t" + std::to_string(src_node_id);
+        }
+
+        resolving.insert(src_node_id);
+        const graph::ScriptNode* src_node = g.FindNode(src_node_id);
+        if (!src_node) {
+            resolving.erase(src_node_id);
+            return "None";
+        }
+
+        for (const auto& in_pin : src_node->pins) {
+            if (in_pin.flow != graph::PinFlow::Data || in_pin.kind != graph::PinKind::Input)
+                continue;
+            for (const auto& c : g.connections) {
+                if (c.to_pin_id == in_pin.id) {
+                    std::string v = resolve_output(c.from_pin_id, resolving);
+                    resolving.erase(src_node_id);
+                    return v;
+                }
+            }
+        }
+
+        resolving.erase(src_node_id);
+        return "_t" + std::to_string(src_node_id);
+    };
+
+    std::function<void(uint64_t, uint64_t)> dfs_node;
+    dfs_node = [&](uint64_t node_id, uint64_t from_node_id) {
+        if (node_id == 0) return;
+
+        if (in_stack.count(node_id)) {
+            result.has_cycle = true;
+            result.cycle_edges.push_back({from_node_id, node_id});
+            return;
+        }
+        if (visited.count(node_id)) return;
+
+        const graph::ScriptNode* node = g.FindNode(node_id);
+        if (!node) return;
+
+        visited.insert(node_id);
+        in_stack.insert(node_id);
+        result.node_ids.push_back(node_id);
+
+        // Collect resolved data dependencies for this statement node.
+        auto& deps = result.data_dependencies[node_id];
+        for (const auto& pin : node->pins) {
+            if (pin.flow != graph::PinFlow::Data || pin.kind != graph::PinKind::Input)
+                continue;
+
+            std::string resolved;
+            bool connected = false;
+            for (const auto& conn : g.connections) {
+                if (conn.to_pin_id == pin.id) {
+                    std::unordered_set<uint64_t> resolving;
+                    resolved = resolve_output(conn.from_pin_id, resolving);
+                    connected = true;
+                    break;
+                }
+            }
+            if (!connected)
+                resolved = pin.value.empty() ? DefaultLiteralForType(pin.type) : pin.value;
+
+            deps.push_back({pin.name, resolved});
+        }
+
+        // Determine deterministic next exec-out pins.
+        std::vector<uint64_t> ordered_exec_out;
+        auto push_pin_if = [&](const std::string& name) {
+            uint64_t pid = FindExecOutPin(g, node_id, name);
+            if (pid != 0) ordered_exec_out.push_back(pid);
+        };
+
+        if (node->type_id == "builtin.IfElse") {
+            push_pin_if("True");
+            push_pin_if("False");
+            push_pin_if("After");
+        } else if (node->type_id == "builtin.WhileLoop") {
+            push_pin_if("Loop Body");
+            push_pin_if("Completed");
+        } else if (node->type_id == "builtin.Sequence") {
+            for (const auto& p : node->pins) {
+                if (p.flow == graph::PinFlow::Execution && p.kind == graph::PinKind::Output)
+                    ordered_exec_out.push_back(p.id);
+            }
+        } else {
+            uint64_t out = FindExecOutPin(g, node_id, "Out");
+            if (out != 0)
+                ordered_exec_out.push_back(out);
+            for (const auto& p : node->pins) {
+                if (p.flow == graph::PinFlow::Execution && p.kind == graph::PinKind::Output && p.id != out)
+                    ordered_exec_out.push_back(p.id);
+            }
+        }
+
+        for (uint64_t out_pin_id : ordered_exec_out) {
+            for (uint64_t next_node_id : NextExecNodes(g, out_pin_id))
+                dfs_node(next_node_id, node_id);
+        }
+
+        in_stack.erase(node_id);
+    };
+
+    for (uint64_t first : NextExecNodes(g, start_exec_out_pin_id))
+        dfs_node(first, 0);
 
     return result;
 }

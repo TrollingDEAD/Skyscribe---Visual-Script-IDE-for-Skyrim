@@ -15,6 +15,10 @@ public:
 
     // Generate a full .psc script text from the given ScriptGraph.
     static Result Generate(const graph::ScriptGraph& g);
+
+    // 3.2 options
+    static void SetEmitSourceComments(bool enabled);
+    static void SetIndentWithTabs(bool enabled);
 };
 
 } // namespace codegen

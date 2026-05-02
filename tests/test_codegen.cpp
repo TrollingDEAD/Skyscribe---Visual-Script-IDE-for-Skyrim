@@ -103,6 +103,30 @@ TEST_CASE("Traverse follows linear exec chain", "[traversal]") {
     CHECK_FALSE(result.has_cycle);
 }
 
+TEST_CASE("TraverseDfs captures IfElse branches in True then False order", "[traversal]") {
+    ScriptGraph g = MakeGraph();
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t if_node = AddBuiltin(g, "builtin.IfElse");
+    uint64_t n_true  = AddBuiltin(g, "builtin.Notification");
+    uint64_t n_false = AddBuiltin(g, "builtin.Trace");
+
+    ConnectExec(g, on_init, if_node);
+    ConnectExecNamed(g, if_node, "True", n_true);
+    ConnectExecNamed(g, if_node, "False", n_false);
+
+    uint64_t start = GraphTraversal::FindExecOutPin(g, on_init, "Out");
+    auto result = GraphTraversal::TraverseDfs(g, start);
+
+    REQUIRE(result.node_ids.size() >= 3);
+    CHECK(result.node_ids[0] == if_node);
+
+    auto it_true  = std::find(result.node_ids.begin(), result.node_ids.end(), n_true);
+    auto it_false = std::find(result.node_ids.begin(), result.node_ids.end(), n_false);
+    REQUIRE(it_true  != result.node_ids.end());
+    REQUIRE(it_false != result.node_ids.end());
+    CHECK(it_true < it_false);
+}
+
 TEST_CASE("Traverse stops at IfElse (branching node)", "[traversal]") {
     ScriptGraph g = MakeGraph();
     uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
@@ -134,27 +158,84 @@ TEST_CASE("Traverse continues past WhileLoop via Completed pin", "[traversal]") 
 }
 
 TEST_CASE("Traverse detects execution cycles", "[traversal]") {
-    // This creates a self-referential cycle that can't normally happen in the
-    // real graph (ScriptGraph::CanConnect prevents it), but we test it directly
-    // via a raw connection between two nodes that forms a back-edge.
-    // We'll rely on the fact that if node A -> node B -> node A (cycle) the
-    // traversal should detect it.
-    // For a simpler test: traverse a chain where the traversal would re-visit
-    // a node — simulate by checking that cycle detection fires.
-    // (A real graph won't allow exec cycles, but the traversal logic is still correct.)
     ScriptGraph g = MakeGraph();
-    // We test cycle detection logic via the cycle_edges output.
-    // Traverse on a simple linear chain should have no cycle.
     uint64_t a = AddBuiltin(g, "builtin.Notification");
     uint64_t b = AddBuiltin(g, "builtin.Notification");
     ConnectExec(g, a, b);
 
-    uint64_t start = 0;
+    // Create a synthetic back-edge B -> A to validate cycle detection in traversal.
+    uint64_t b_out = 0, a_in = 0, start = 0;
+    const ScriptNode* nb = g.FindNode(b);
     const ScriptNode* na = g.FindNode(a);
+    for (const auto& p : nb->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Output) { b_out = p.id; break; }
+    for (const auto& p : na->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Input) { a_in = p.id; break; }
     for (const auto& p : na->pins)
         if (p.flow == PinFlow::Execution && p.kind == PinKind::Output) { start = p.id; break; }
-    auto result = GraphTraversal::Traverse(g, start);
+
+    REQUIRE(b_out != 0);
+    REQUIRE(a_in  != 0);
+    REQUIRE(start != 0);
+
+    Connection back;
+    back.id = g.next_conn_id++;
+    back.from_pin_id = b_out;
+    back.to_pin_id   = a_in;
+    g.connections.push_back(back);
+
+    auto result = GraphTraversal::TraverseDfs(g, start);
+    CHECK(result.has_cycle);
+    auto edges = GraphTraversal::GetCycleEdges(result);
+    CHECK_FALSE(edges.empty());
+}
+
+TEST_CASE("TraverseDfs handles empty graph", "[traversal]") {
+    ScriptGraph g = MakeGraph();
+    auto result = GraphTraversal::TraverseDfs(g, 0);
+    CHECK(result.node_ids.empty());
     CHECK_FALSE(result.has_cycle);
+    CHECK(result.data_dependencies.empty());
+}
+
+TEST_CASE("TraverseDfs recognises while loop body and back-edge cycle", "[traversal]") {
+    ScriptGraph g = MakeGraph();
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t loop    = AddBuiltin(g, "builtin.WhileLoop");
+    uint64_t body    = AddBuiltin(g, "builtin.Notification");
+    uint64_t after   = AddBuiltin(g, "builtin.Trace");
+
+    ConnectExec(g, on_init, loop);
+    ConnectExecNamed(g, loop, "Loop Body", body);
+    ConnectExecNamed(g, loop, "Completed", after);
+
+    // Synthetic loop-back edge: body Out -> loop In
+    uint64_t body_out = 0, loop_in = 0;
+    const ScriptNode* n_body = g.FindNode(body);
+    const ScriptNode* n_loop = g.FindNode(loop);
+    for (const auto& p : n_body->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Output) { body_out = p.id; break; }
+    for (const auto& p : n_loop->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Input) { loop_in = p.id; break; }
+    REQUIRE(body_out != 0);
+    REQUIRE(loop_in  != 0);
+    Connection back;
+    back.id = g.next_conn_id++;
+    back.from_pin_id = body_out;
+    back.to_pin_id   = loop_in;
+    g.connections.push_back(back);
+
+    uint64_t start = GraphTraversal::FindExecOutPin(g, on_init, "Out");
+    auto result = GraphTraversal::TraverseDfs(g, start);
+
+    auto has_node = [&](uint64_t id) {
+        return std::find(result.node_ids.begin(), result.node_ids.end(), id) != result.node_ids.end();
+    };
+    CHECK(has_node(loop));
+    CHECK(has_node(body));
+    CHECK(has_node(after));
+    CHECK(result.has_cycle);
+    CHECK_FALSE(result.cycle_edges.empty());
 }
 
 TEST_CASE("FindEventNodes returns only event nodes", "[traversal]") {
@@ -184,6 +265,30 @@ TEST_CASE("Generate emits Scriptname header", "[codegen]") {
     ScriptGraph g = MakeGraph("MyScript", "ObjectReference");
     auto result = PapyrusStringBuilder::Generate(g);
     CHECK(Contains(result.source, "Scriptname MyScript extends ObjectReference"));
+}
+
+TEST_CASE("Generate emits source comment when enabled", "[codegen]") {
+    PapyrusStringBuilder::SetEmitSourceComments(true);
+
+    ScriptGraph g = MakeGraph("CommentScript", "ObjectReference");
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "; Generated by Skyscribe"));
+
+    PapyrusStringBuilder::SetEmitSourceComments(false);
+}
+
+TEST_CASE("Generate uses tab indentation when configured", "[codegen]") {
+    PapyrusStringBuilder::SetIndentWithTabs(true);
+
+    ScriptGraph g = MakeGraph("IndentScript", "ObjectReference");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t notif   = AddBuiltin(g, "builtin.Notification");
+    ConnectExec(g, on_init, notif);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "\n\tDebug.Notification("));
+
+    PapyrusStringBuilder::SetIndentWithTabs(false);
 }
 
 TEST_CASE("Generate empty script name is an error", "[codegen]") {
@@ -352,12 +457,17 @@ TEST_CASE("Generate resolves chained data expressions", "[codegen]") {
     CHECK(Contains(result.source, "Game.GetPlayer().IsDead()"));
 }
 
-TEST_CASE("Generate resolves math expression", "[codegen]") {
+TEST_CASE("Generate hoists math expression into temp variable", "[codegen]") {
     ScriptGraph g = MakeGraph("TestScript");
     uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
     uint64_t svar    = AddBuiltin(g, "builtin.SetVariable");
     uint64_t add_int = AddBuiltin(g, "builtin.AddInt");
     ConnectExec(g, on_init, svar);
+
+    // Set target variable for assignment
+    ScriptNode* sv_set = g.FindNode(svar);
+    for (auto& p : sv_set->pins)
+        if (p.name == "Variable") p.value = "iResult";
 
     // Set A and B defaults on AddInt
     ScriptNode* an = g.FindNode(add_int);
@@ -377,7 +487,43 @@ TEST_CASE("Generate resolves math expression", "[codegen]") {
     g.Connect(result_out, value_in);
 
     auto res = PapyrusStringBuilder::Generate(g);
-    CHECK(Contains(res.source, "1 + 2"));
+    CHECK(Contains(res.source, "Int _t0 = 1 + 2"));
+    CHECK(Contains(res.source, "iResult = _t0"));
+}
+
+TEST_CASE("Generate emits Sequence branches in declaration order", "[codegen]") {
+    ScriptGraph g = MakeGraph("SeqScript");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t seq     = AddBuiltin(g, "builtin.Sequence");
+    uint64_t n0      = AddBuiltin(g, "builtin.Notification");
+    uint64_t n1      = AddBuiltin(g, "builtin.Notification");
+    uint64_t n2      = AddBuiltin(g, "builtin.Notification");
+
+    ConnectExec(g, on_init, seq);
+    ConnectExecNamed(g, seq, "Then 0", n0);
+    ConnectExecNamed(g, seq, "Then 1", n1);
+    ConnectExecNamed(g, seq, "Then 2", n2);
+
+    auto set_msg = [&](uint64_t node_id, const std::string& msg) {
+        ScriptNode* n = g.FindNode(node_id);
+        REQUIRE(n != nullptr);
+        for (auto& p : n->pins)
+            if (p.name == "akMessage") { p.value = msg; return; }
+        FAIL("Notification node missing akMessage pin");
+    };
+    set_msg(n0, "\"A\"");
+    set_msg(n1, "\"B\"");
+    set_msg(n2, "\"C\"");
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    auto a = result.source.find("Debug.Notification(\"A\")");
+    auto b = result.source.find("Debug.Notification(\"B\")");
+    auto c = result.source.find("Debug.Notification(\"C\")");
+    REQUIRE(a != std::string::npos);
+    REQUIRE(b != std::string::npos);
+    REQUIRE(c != std::string::npos);
+    CHECK(a < b);
+    CHECK(b < c);
 }
 
 TEST_CASE("Generate emits properties", "[codegen]") {
@@ -817,6 +963,44 @@ TEST_CASE("Generate emits typed Function with return type", "[functions]") {
     g.AddFunction("GetValue", PinType::Float);
     auto result = PapyrusStringBuilder::Generate(g);
     CHECK(Contains(result.source, "Float Function GetValue()"));
+    g.RemoveFunction("GetValue");
+}
+
+TEST_CASE("Generate emits Return with value in typed function", "[functions]") {
+    ScriptGraph g = MakeGraph("FuncReturnValueScript");
+    auto& f = g.AddFunction("GetValue", PinType::Float);
+    REQUIRE(f.body_graph != nullptr);
+
+    const std::string entry_type  = "script." + g.script_name + ".entry.GetValue";
+    const std::string return_type = "script." + g.script_name + ".return.GetValue";
+
+    uint64_t entry_id = 0;
+    for (const auto& n : f.body_graph->nodes) {
+        if (n.type_id == entry_type) { entry_id = n.id; break; }
+    }
+    REQUIRE(entry_id != 0);
+
+    const NodeDefinition* ret_def = NodeRegistry::Get().Find(return_type);
+    REQUIRE(ret_def != nullptr);
+    uint64_t ret_id = f.body_graph->AddNode(*ret_def, 280.0f, 80.0f);
+    ConnectExec(*f.body_graph, entry_id, ret_id);
+
+    ScriptNode* rn = f.body_graph->FindNode(ret_id);
+    REQUIRE(rn != nullptr);
+    bool set_value = false;
+    for (auto& p : rn->pins) {
+        if (p.name == "Value" && p.flow == PinFlow::Data && p.kind == PinKind::Input) {
+            p.value = "1.5";
+            set_value = true;
+            break;
+        }
+    }
+    REQUIRE(set_value);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Float Function GetValue()"));
+    CHECK(Contains(result.source, "Return 1.5"));
+
     g.RemoveFunction("GetValue");
 }
 
