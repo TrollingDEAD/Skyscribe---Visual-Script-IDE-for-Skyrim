@@ -103,6 +103,10 @@ void MainWindow::Render() {
                 proj.IsDirty() ||
                 codegen_dirty_.IsSet())
             {
+                // Reset edit-mode override when the user switches to a different script.
+                if (active != last_codegen_script_idx_)
+                    preview_.ResetEditMode();
+
                 codegen_dirty_.Clear();
                 last_codegen_script_idx_ = active;
                 last_script_node_count_  = node_count;
@@ -162,13 +166,21 @@ void MainWindow::Render() {
                 int active = proj2.ActiveScriptIndex();
                 if (active >= 0 && active < (int)proj2.Scripts().size()) {
                     const auto& g = proj2.Scripts()[active];
-                    auto gen = codegen::PapyrusStringBuilder::Generate(g);
-                    if (!gen.has_errors) {
-                        std::string src_dir = proj2.Meta().root_dir + "\\Scripts\\Source";
-                        std::filesystem::create_directories(src_dir);
-                        script_path = src_dir + "\\" + g.script_name + ".psc";
+                    std::string src_dir = proj2.Meta().root_dir + "\\Scripts\\Source";
+                    std::filesystem::create_directories(src_dir);
+                    script_path = src_dir + "\\" + g.script_name + ".psc";
+                    if (preview_.IsEditMode()) {
+                        // Compile the user's manually edited source directly.
                         std::ofstream f(script_path);
-                        if (f) f << gen.source;
+                        if (f) f << preview_.GetEditedText();
+                    } else {
+                        auto gen = codegen::PapyrusStringBuilder::Generate(g);
+                        if (!gen.has_errors) {
+                            std::ofstream f(script_path);
+                            if (f) f << gen.source;
+                        } else {
+                            script_path.clear(); // block compile on codegen errors
+                        }
                     }
                 }
             }
