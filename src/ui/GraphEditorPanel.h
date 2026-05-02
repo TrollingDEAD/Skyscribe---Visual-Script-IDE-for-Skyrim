@@ -87,6 +87,14 @@ private:
     // Rename state
     char         func_rename_buf_[129] = {};
     int          func_rename_idx_      = -1; // which function is being renamed
+
+    // Property panel state (task 3.11)
+    char         prop_name_buf_[129]    = {};
+    int          prop_type_idx_         = 0;  // 0=Int,1=Float,2=Bool,3=String,4=ObjectReference
+    int          prop_kind_idx_         = 0;  // 0=Auto,1=AutoReadOnly
+    bool         prop_add_dialog_open_  = false;
+    int          prop_rename_idx_       = -1;
+    char         prop_rename_buf_[129]  = {};
 };
 
 } // namespace ui

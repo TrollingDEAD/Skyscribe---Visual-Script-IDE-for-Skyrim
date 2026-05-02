@@ -114,6 +114,24 @@ struct DeleteFunctionCmd : ICommand {
     std::string Description()    const override { return "Delete Function"; }
 };
 
+// Records an AddProperty operation for undo/redo.
+struct AddPropertyCmd : ICommand {
+    PropertyDefinition prop_;
+    explicit AddPropertyCmd(const PropertyDefinition& p) : prop_(p) {}
+    void Execute(ScriptGraph& g) override;
+    void Undo(ScriptGraph& g)    override;
+    std::string Description()    const override { return "Add Property"; }
+};
+
+// Records a DeleteProperty operation for undo/redo.
+struct DeletePropertyCmd : ICommand {
+    PropertyDefinition prop_;
+    explicit DeletePropertyCmd(const PropertyDefinition& p) : prop_(p) {}
+    void Execute(ScriptGraph& g) override;
+    void Undo(ScriptGraph& g)    override;
+    std::string Description()    const override { return "Delete Property"; }
+};
+
 // ── UndoStack ─────────────────────────────────────────────────────────────────
 
 class UndoStack {

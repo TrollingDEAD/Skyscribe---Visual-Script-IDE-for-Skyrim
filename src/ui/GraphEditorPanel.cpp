@@ -155,6 +155,134 @@ void GraphEditorPanel::Render() {
 
     ImGui::Separator();
 
+    // ── Properties panel (task 3.11) ─────────────────────────────────────────
+    if (ImGui::CollapsingHeader("Properties")) {
+        // [+ Add Property] button
+        if (ImGui::Button("[+ Add Property]")) {
+            prop_add_dialog_open_ = true;
+            prop_name_buf_[0] = '\0';
+            prop_type_idx_ = 0;
+            prop_kind_idx_ = 0;
+        }
+
+        // Property list
+        static const char* kPropTypes[] = {
+            "Int", "Float", "Bool", "String", "ObjectReference"
+        };
+        static const graph::PinType kPropPinTypes[] = {
+            graph::PinType::Int, graph::PinType::Float, graph::PinType::Bool,
+            graph::PinType::String, graph::PinType::ObjectRef
+        };
+        static const char* kPropKinds[] = { "Auto", "AutoReadOnly" };
+
+        int to_delete = -1;
+        for (int i = 0; i < static_cast<int>(g.properties.size()); ++i) {
+            auto& prop = g.properties[i];
+            ImGui::PushID(i);
+            // type label + name
+            const char* type_str = "?";
+            for (int t = 0; t < static_cast<int>(std::size(kPropPinTypes)); ++t)
+                if (kPropPinTypes[t] == prop.type) { type_str = kPropTypes[t]; break; }
+            ImGui::TextDisabled("[%s]", type_str);
+            ImGui::SameLine();
+            ImGui::TextUnformatted(prop.name.c_str());
+            // right-click context menu
+            if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                prop_rename_idx_ = i;
+                std::strncpy(prop_rename_buf_, prop.name.c_str(), sizeof(prop_rename_buf_) - 1);
+                prop_rename_buf_[sizeof(prop_rename_buf_) - 1] = '\0';
+                ImGui::OpenPopup("##PropCtx");
+            }
+            ImGui::PopID();
+        }
+
+        // Property context popup (rename / delete)
+        if (ImGui::BeginPopup("##PropCtx") && prop_rename_idx_ >= 0 &&
+            prop_rename_idx_ < static_cast<int>(g.properties.size())) {
+            if (ImGui::MenuItem("Rename")) {
+                ImGui::CloseCurrentPopup();
+                ImGui::OpenPopup("##RenameProp");
+            }
+            if (ImGui::MenuItem("Delete")) {
+                graph::PropertyDefinition copy = g.properties[prop_rename_idx_];
+                auto cmd = std::make_unique<graph::DeletePropertyCmd>(copy);
+                cmd->Execute(g);
+                undo_.Push(std::move(cmd));
+                proj.MarkDirty();
+                prop_rename_idx_ = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+
+        // Rename popup
+        if (ImGui::BeginPopup("##RenameProp")) {
+            ImGui::TextUnformatted("Rename property:");
+            if (ImGui::InputText("##renameprop", prop_rename_buf_, sizeof(prop_rename_buf_),
+                                 ImGuiInputTextFlags_EnterReturnsTrue)) {
+                if (prop_rename_buf_[0] != '\0' && prop_rename_idx_ >= 0 &&
+                    prop_rename_idx_ < static_cast<int>(g.properties.size())) {
+                    g.RenameProperty(g.properties[prop_rename_idx_].name, prop_rename_buf_);
+                    proj.MarkDirty();
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("OK")) {
+                if (prop_rename_buf_[0] != '\0' && prop_rename_idx_ >= 0 &&
+                    prop_rename_idx_ < static_cast<int>(g.properties.size())) {
+                    g.RenameProperty(g.properties[prop_rename_idx_].name, prop_rename_buf_);
+                    proj.MarkDirty();
+                }
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+    }
+
+    // Add Property modal
+    if (prop_add_dialog_open_) {
+        ImGui::OpenPopup("AddProperty##modal");
+        prop_add_dialog_open_ = false;
+    }
+    if (ImGui::BeginPopupModal("AddProperty##modal", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        static const char* kPropTypes2[] = {
+            "Int", "Float", "Bool", "String", "ObjectReference"
+        };
+        static const graph::PinType kPropPinTypes2[] = {
+            graph::PinType::Int, graph::PinType::Float, graph::PinType::Bool,
+            graph::PinType::String, graph::PinType::ObjectRef
+        };
+        static const char* kPropKinds2[] = { "Auto", "AutoReadOnly" };
+        ImGui::InputText("Name##propname", prop_name_buf_, sizeof(prop_name_buf_));
+        ImGui::Combo("Type##proptype", &prop_type_idx_, kPropTypes2,
+                     static_cast<int>(std::size(kPropTypes2)));
+        ImGui::Combo("Kind##propkind", &prop_kind_idx_, kPropKinds2,
+                     static_cast<int>(std::size(kPropKinds2)));
+        if (ImGui::Button("Add")) {
+            if (prop_name_buf_[0] != '\0') {
+                graph::PropertyKind kind = (prop_kind_idx_ == 1)
+                    ? graph::PropertyKind::AutoReadOnly
+                    : graph::PropertyKind::Auto;
+                auto& added = g.AddProperty(prop_name_buf_, kPropPinTypes2[prop_type_idx_], kind);
+                graph::PropertyDefinition snapshot = added;
+                undo_.Push(std::make_unique<graph::AddPropertyCmd>(snapshot));
+                proj.MarkDirty();
+                prop_name_buf_[0] = '\0';
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            prop_name_buf_[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    ImGui::Separator();
+
     // ── Function tabs (task 3.9) ──────────────────────────────────────────────
     // Clamp active_func_tab_ in case a function was removed externally
     if (active_func_tab_ >= static_cast<int>(g.functions.size()))

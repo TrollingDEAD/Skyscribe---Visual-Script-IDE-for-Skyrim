@@ -1,5 +1,6 @@
 #include "graph/ScriptGraph.h"
 #include "graph/NodeRegistry.h"
+#include "graph/BuiltinNodes.h"
 
 #include <algorithm>
 
@@ -188,6 +189,53 @@ const FunctionDefinition* ScriptGraph::FindFunction(const std::string& name) con
         if (f.name == name) return &f;
     return nullptr;
 }
+
+// ── Property helpers ──────────────────────────────────────────────────────────
+
+PropertyDefinition& ScriptGraph::AddProperty(const std::string& name,
+                                              PinType type,
+                                              PropertyKind kind,
+                                              const std::string& default_value) {
+    PropertyDefinition prop;
+    prop.name          = name;
+    prop.type          = type;
+    prop.kind          = kind;
+    prop.default_value = default_value;
+    properties.push_back(std::move(prop));
+    // Re-sync all Get/Set nodes for this script
+    BuiltinNodes::SyncPropertyNodes(script_name, properties);
+    return properties.back();
+}
+
+void ScriptGraph::RemoveProperty(const std::string& name) {
+    auto it = std::find_if(properties.begin(), properties.end(),
+        [&name](const PropertyDefinition& p) { return p.name == name; });
+    if (it == properties.end()) return;
+    properties.erase(it);
+    BuiltinNodes::SyncPropertyNodes(script_name, properties);
+}
+
+void ScriptGraph::RenameProperty(const std::string& old_name,
+                                  const std::string& new_name) {
+    auto it = std::find_if(properties.begin(), properties.end(),
+        [&old_name](const PropertyDefinition& p) { return p.name == old_name; });
+    if (it == properties.end()) return;
+    it->name = new_name;
+    BuiltinNodes::SyncPropertyNodes(script_name, properties);
+}
+
+PropertyDefinition* ScriptGraph::FindProperty(const std::string& name) {
+    for (auto& p : properties)
+        if (p.name == name) return &p;
+    return nullptr;
+}
+
+const PropertyDefinition* ScriptGraph::FindProperty(const std::string& name) const {
+    for (const auto& p : properties)
+        if (p.name == name) return &p;
+    return nullptr;
+}
+
 
 uint64_t ScriptGraph::AddNode(const NodeDefinition& def, float x, float y) {
     ScriptNode node;

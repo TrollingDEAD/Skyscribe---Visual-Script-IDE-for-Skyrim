@@ -125,6 +125,25 @@ struct ScriptGraph {
     FunctionDefinition*       FindFunction(const std::string& name);
     const FunctionDefinition* FindFunction(const std::string& name) const;
 
+    // ── Property helpers ──────────────────────────────────────────────────────
+
+    // Add a property. Registers Get/Set nodes in NodeRegistry.
+    // Returns reference valid until next mutation.
+    PropertyDefinition& AddProperty(const std::string& name,
+                                    PinType type,
+                                    PropertyKind kind = PropertyKind::Auto,
+                                    const std::string& default_value = "");
+
+    // Remove a property by name. Unregisters Get/Set nodes.
+    void RemoveProperty(const std::string& name);
+
+    // Rename a property. Re-registers Get/Set nodes.
+    void RenameProperty(const std::string& old_name, const std::string& new_name);
+
+    // Returns pointer to the property with this name, or nullptr.
+    PropertyDefinition*       FindProperty(const std::string& name);
+    const PropertyDefinition* FindProperty(const std::string& name) const;
+
     // Read-only queries ────────────────────────────────────────────────────────
 
     // Returns true if this wire would be accepted by Connect().

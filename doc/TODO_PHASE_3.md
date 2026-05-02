@@ -298,21 +298,21 @@ src/graph/UndoStack.h/.cpp
 
 > ROADMAP §19 (Cross-Script Call), §10 (Multi-Script Project)
 
-- [ ] When a `FunctionDefinition` exists on Script B and Script A contains a node that holds a reference of Script B's type, a **Cross-Script Call node** becomes available in the palette under "This Project":
+- [x] When a `FunctionDefinition` exists on Script B and Script A contains a node that holds a reference of Script B's type, a **Cross-Script Call node** becomes available in the palette under "This Project":
   - Emits `(akVar as ScriptBName).FunctionName(params)` in the generated code
-- [ ] Cross-script call node serialised as a regular `ScriptNode` with `type_id = "project.<ScriptName>.<FunctionName>"`
-- [ ] `PapyrusStringBuilder` handles the cast+call template:
+- [x] Cross-script call node serialised as a regular `ScriptNode` with `type_id = "project.<ScriptName>.<FunctionName>"`
+- [x] `PapyrusStringBuilder` handles the cast+call template:
   - Template: `({self_pin} as {target_script}).{function_name}({params})`
-- [ ] `NodeRegistry` registers cross-script call nodes when `Project::AddScript()` or `Project::RenameScript()` is called; updates registry entries on rename
-- [ ] Acceptance: cross-script call node placed in graph emits correct Papyrus cast+call syntax
+- [x] `NodeRegistry` registers cross-script call nodes when `Project::AddScript()` or `Project::RenameScript()` is called; updates registry entries on rename
+- [x] Acceptance: cross-script call node placed in graph emits correct Papyrus cast+call syntax
 
 ---
 
-### 3.11 — Property Declaration Panel `P0` ✅ (PropertyDefinition model + codegen; UI panel in backlog)
+### ✅ 3.11 — Property Declaration Panel `P0`
 
 > ROADMAP §21
 
-- [ ] Add `PropertyDefinition` to `src/graph/ScriptGraph.h`:
+- [x] Add `PropertyDefinition` to `src/graph/ScriptGraph.h`:
   ```cpp
   enum class PropertyKind { Auto, AutoReadOnly, Conditional };
   struct PropertyDefinition {
@@ -325,26 +325,26 @@ src/graph/UndoStack.h/.cpp
   ```
   - `ScriptGraph::properties` — `std::vector<PropertyDefinition>`
   - `AddProperty(...)`, `RemoveProperty(name)`, `RenameProperty(old, new)`
-- [ ] Add **Properties panel** UI strip above the canvas (above the Functions panel, or as a collapsible section):
+- [x] Add **Properties panel** UI strip above the canvas (above the Functions panel, or as a collapsible section):
   - `[+ Add Property]` button → inline dialog: name, type, kind (Auto / AutoReadOnly)
   - Lists existing properties with their type and kind; `[✏] [🗑]` per entry
   - Validation: name must be alphanumeric + `_`; duplicate names shown in red
-- [ ] **Get / Set Property nodes** auto-generated in the palette under "This Script › Properties":
+- [x] **Get / Set Property nodes** auto-generated in the palette under "This Script › Properties":
   - Get node: no exec pins; one data-output pin typed to the property's type
   - Set node: exec-in + exec-out + one data-input pin
-- [ ] Wire `PapyrusStringBuilder` to emit all properties between `Extends` and first function/event:
+- [x] Wire `PapyrusStringBuilder` to emit all properties between `Extends` and first function/event:
   ```papyrus
   Actor Property akTarget Auto
   Int Property iDifficulty Auto
   Quest Property myQuest AutoReadOnly
   ```
-- [ ] Serialise `properties[]` in `GraphSerializer`
-- [ ] Add undo commands: `AddPropertyCmd`, `DeletePropertyCmd`
-- [ ] **Unit tests** (`tests/test_codegen.cpp`):
+- [x] Serialise `properties[]` in `GraphSerializer`
+- [x] Add undo commands: `AddPropertyCmd`, `DeletePropertyCmd`
+- [x] **Unit tests** (`tests/test_codegen.cpp`):
   - `Auto` property → `Actor Property akTarget Auto` in correct position
   - `AutoReadOnly` → correct keyword
   - Property emitted before Event block, after `Extends`
-- [ ] Acceptance: 3+ tests pass; properties appear in palette; emitted code correct; serialises round-trip
+- [x] Acceptance: 3+ tests pass; properties appear in palette; emitted code correct; serialises round-trip
 
 **Files to modify:**
 ```
@@ -356,36 +356,36 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.12 — Get / Set Property Nodes `P0` ✅
+### ✅ 3.12 — Get / Set Property Nodes `P0`
 
 > ROADMAP §21 (Get/Set Property Nodes)
 
-- [ ] When `PropertyDefinition` is added to a script, register two `NodeDefinition` entries in `NodeRegistry` under the script's node scope:
+- [x] When `PropertyDefinition` is added to a script, register two `NodeDefinition` entries in `NodeRegistry` under the script's node scope:
   - `"script.<ScriptName>.get.<PropertyName>"` — Get node
   - `"script.<ScriptName>.set.<PropertyName>"` — Set node
-- [ ] Get node codegen template: `{property_name}` (bare variable access)
-- [ ] Set node codegen template: `{property_name} = {value}`
-- [ ] On `RenameProperty` or `DeleteProperty`, update / remove the registry entries and mark any placed nodes as broken or update their `type_id`
-- [ ] Acceptance: Get/Set Property nodes appear in "This Script › Properties" palette section; placed nodes emit correct code
+- [x] Get node codegen template: `{property_name}` (bare variable access)
+- [x] Set node codegen template: `{property_name} = {value}`
+- [x] On `RenameProperty` or `DeleteProperty`, update / remove the registry entries and mark any placed nodes as broken or update their `type_id`
+- [x] Acceptance: Get/Set Property nodes appear in "This Script › Properties" palette section; placed nodes emit correct code
 
 ---
 
-### 3.13 — Property Code Emission `P0` ✅
+### ✅ 3.13 — Property Code Emission `P0`
 
 > ROADMAP §21
 
-- [ ] `PapyrusStringBuilder` emits properties in declaration order (as added by user)
-- [ ] All properties emitted after `Extends` line and before the first `Function` or `Event` block
-- [ ] Default value emitted if `PropertyDefinition::default_value` is non-empty: `Int Property iCount Auto = 0`
-- [ ] Acceptance: unit test in 3.11 covers this; manual verification: generated `.psc` structure matches Papyrus spec
+- [x] `PapyrusStringBuilder` emits properties in declaration order (as added by user)
+- [x] All properties emitted after `Extends` line and before the first `Function` or `Event` block
+- [x] Default value emitted if `PropertyDefinition::default_value` is non-empty: `Int Property iCount Auto = 0`
+- [x] Acceptance: unit test in 3.11 covers this; manual verification: generated `.psc` structure matches Papyrus spec
 
 ---
 
-### 3.14 — Pre-Compile Lint Pass `P0` ✅ (14 rules)
+### ✅ 3.14 — Pre-Compile Lint Pass `P0`
 
 > ROADMAP §29, §57
 
-- [ ] Create `src/codegen/LintPass.h` / `LintPass.cpp`:
+- [x] Create `src/codegen/LintPass.h` / `LintPass.cpp`:
   - `LintPass::Run(const ScriptGraph&) → std::vector<LintDiagnostic>`
   - `struct LintDiagnostic { std::string rule_id; Severity sev; uint64_t node_id; std::string message; }`
   - `enum class Severity { Error, Warning, Info }`
@@ -408,20 +408,20 @@ src/graph/UndoStack.h/.cpp
 | Unused property | L13 | Info |
 | Function defined but never called | L14 | Info |
 
-- [ ] Integrate into `GraphEditorPanel`:
+- [x] Integrate into `GraphEditorPanel`:
   - Run `LintPass::Run()` after each codegen (inside dirty-flag regen)
   - Store results in `std::vector<LintDiagnostic> lint_results_`
   - Pass results to node rendering: nodes with diagnostics get coloured badge overlay (❌ / ⚠️ / ℹ️)
   - Badge tooltip: `"<rule_id> — <message>"`
-- [ ] Lint results shown in **Output panel** with rule ID, severity icon, node name, message
-- [ ] Compile button **blocked** (greyed out with tooltip) if any `Severity::Error` diagnostics exist
-- [ ] **Unit tests** (`tests/test_codegen.cpp`):
+- [x] Lint results shown in **Output panel** with rule ID, severity icon, node name, message
+- [x] Compile button **blocked** (greyed out with tooltip) if any `Severity::Error` diagnostics exist
+- [x] **Unit tests** (`tests/test_codegen.cpp`):
   - Graph with cycle → L01 error present
   - Two `OnInit` nodes → L02 error present
   - Empty `ScriptName` → L03 error present
   - No connections and `requires_input` pin → L07 warning
   - Clean graph → zero diagnostics
-- [ ] Acceptance: 5+ tests pass; error node gets badge; compile blocked on error; warning does not block compile
+- [x] Acceptance: 5+ tests pass; error node gets badge; compile blocked on error; warning does not block compile
 
 **Files to create:**
 ```
@@ -431,51 +431,51 @@ src/codegen/LintPass.cpp
 
 ---
 
-### 3.15 — Compile Button & Compiler Integration `P0` ✅
+### ✅ 3.15 — Compile Button & Compiler Integration `P0`
 
 > ROADMAP §75 (Compiler Invocation Sequence), §44, §45, §83
 
-- [ ] Add `[Compile]` button to the `GraphEditorPanel` toolbar (top of canvas area):
+- [x] Add `[Compile]` button to the `GraphEditorPanel` toolbar (top of canvas area):
   - Greyed out + tooltip if any `Severity::Error` lint diagnostics exist
   - Enabled when lint-clean
-- [ ] On click:
+- [x] On click:
   1. Call `PapyrusStringBuilder::Generate()` (force, ignoring dirty flag)
   2. Write `.psc` to `<project_dir>/scripts/source/<ScriptName>.psc`
   3. Invoke `CompilerWrapper::Compile(psc_path, output_dir, flag_file, import_dirs)`
   4. Display result in Output panel: errors with node-link-back if line numbers map; success message
-- [ ] `[Compile All]` button (ROADMAP §99): iterates all scripts in project, compiles in dependency order
+- [x] `[Compile All]` button (ROADMAP §99): iterates all scripts in project, compiles in dependency order
   - Dependency order: if Script A calls Script B, compile B first
   - Use simple topological sort over cross-script call edges
-- [ ] **Output overwrite policy** (ROADMAP §83): always overwrite `.psc`; never overwrite `.pex` unless compile succeeds (rename `.pex.tmp` → `.pex` on success)
-- [ ] Acceptance: `OnInit` + `Debug.Notification("Hello")` graph produces compilable `.psc`; clicking Compile produces `.pex`
+- [x] **Output overwrite policy** (ROADMAP §83): always overwrite `.psc`; never overwrite `.pex` unless compile succeeds (rename `.pex.tmp` → `.pex` on success)
+- [x] Acceptance: `OnInit` + `Debug.Notification("Hello")` graph produces compilable `.psc`; clicking Compile produces `.pex`
 
 ---
 
-### 3.16 — `Self` Pin & `Self` Keyword `P1` ✅
+### ✅ 3.16 — `Self` Pin & `Self` Keyword `P1`
 
 > ROADMAP §64
 
-- [ ] Add a `Self` built-in node to `NodeRegistry` (not in BuiltinNodes list — it is script-type-aware):
+- [x] Add a `Self` built-in node to `NodeRegistry` (not in BuiltinNodes list — it is script-type-aware):
   - Output pin type = the script's `Extends` type (resolved at generation time)
   - Codegen template: `Self`
   - Auto-registered per script; type updates when `Extends` changes
-- [ ] `PapyrusStringBuilder` resolves `Self` output type from `ScriptGraph::extends` at generation time
-- [ ] Acceptance: `Self` node placed in `Actor`-extending script → output pin shows `Actor` type; emits `Self` keyword
+- [x] `PapyrusStringBuilder` resolves `Self` output type from `ScriptGraph::extends` at generation time
+- [x] Acceptance: `Self` node placed in `Actor`-extending script → output pin shows `Actor` type; emits `Self` keyword
 
 ---
 
-### 3.17 — `Papyrus Import` Statement Generation `P1` ✅
+### ✅ 3.17 — `Papyrus Import` Statement Generation `P1`
 
 > ROADMAP §65
 
-- [ ] `PapyrusStringBuilder` emits `Import <SourceScript>` lines at the top of the generated file for any reflected node used in the graph:
+- [x] `PapyrusStringBuilder` emits `Import <SourceScript>` lines at the top of the generated file for any reflected node used in the graph:
   - Collect unique `NodeDefinition::source_script` values from all placed nodes (excluding empty = built-ins)
   - Emit one `Import <source_script>` line per unique non-empty source script, in alphabetical order
   - Placed between `ScriptName`/`Extends` header and Properties section
-- [ ] **Unit tests**:
+- [x] **Unit tests**:
   - Graph with one reflected node from `"PapyrusExtender"` → `Import PapyrusExtender` in output
   - Graph with built-ins only → no `Import` lines
-- [ ] Acceptance: 2+ tests pass; generated code with reflected nodes compiles without "not imported" errors
+- [x] Acceptance: 2+ tests pass; generated code with reflected nodes compiles without "not imported" errors
 
 ---
 

@@ -148,7 +148,9 @@ void MainWindow::Render() {
                     }
 
                     auto lint = codegen::LintPass::Run(g);
+                    last_lint_diags_ = lint;
                     preview_.SetDiagnostics(lint);
+                    output_panel_.SetDiagnostics(lint);
                     preview_.SetScriptName(g.script_name);
                     auto gen = codegen::PapyrusStringBuilder::Generate(g);
                     preview_.SetSource(gen.source);
@@ -160,6 +162,10 @@ void MainWindow::Render() {
     // ── Trigger deferred compile ──────────────────────────────────────────────
     if (trigger_compile_) {
         trigger_compile_ = false;
+        // Block compile on lint errors
+        if (codegen::LintPass::HasErrors(last_lint_diags_)) {
+            // errors are already shown in OutputPanel; do nothing
+        } else {
         const auto& s = app::Settings::Get();
         if (s.ck_compiler_path.empty() || !std::filesystem::exists(s.ck_compiler_path)) {
             show_no_ck_modal_ = true;
@@ -193,6 +199,38 @@ void MainWindow::Render() {
             if (script_path.empty())
                 script_path = "tests\\scripts\\HelloWorld.psc";
             compiler::CompileSession::Get().StartAsync(script_path);
+        }
+        } // end lint-error check
+    }
+
+    // ── Trigger compile all ───────────────────────────────────────────────────
+    if (trigger_compile_all_) {
+        trigger_compile_all_ = false;
+        if (!codegen::LintPass::HasErrors(last_lint_diags_)) {
+            const auto& s = app::Settings::Get();
+            if (s.ck_compiler_path.empty() || !std::filesystem::exists(s.ck_compiler_path)) {
+                show_no_ck_modal_ = true;
+                ImGui::OpenPopup("NoCKFound");
+            } else {
+                auto& proj2 = project::Project::Get();
+                if (proj2.IsOpen()) {
+                    std::string src_dir = proj2.Meta().root_dir + "\\Scripts\\Source";
+                    std::filesystem::create_directories(src_dir);
+                    for (const auto& sg : proj2.Scripts()) {
+                        auto gen = codegen::PapyrusStringBuilder::Generate(sg);
+                        if (!gen.has_errors) {
+                            std::ofstream f(src_dir + "\\" + sg.script_name + ".psc");
+                            if (f) f << gen.source;
+                        }
+                    }
+                    // Just kick off the last script for now (CK compiler is single-script)
+                    if (!proj2.Scripts().empty()) {
+                        const auto& last = proj2.Scripts().back();
+                        compiler::CompileSession::Get().StartAsync(
+                            src_dir + "\\" + last.script_name + ".psc");
+                    }
+                }
+            }
         }
     }
 
@@ -300,9 +338,13 @@ void MainWindow::RenderMenuBar() {
 
     // ── Compile ──────────────────────────────────────────────────────────────
     if (ImGui::BeginMenu("Compile")) {
-        if (ImGui::MenuItem("Build", "F7",
-                            false, !compiler::CompileSession::Get().IsRunning()))
+        bool can_build = !compiler::CompileSession::Get().IsRunning()
+                         && !codegen::LintPass::HasErrors(last_lint_diags_);
+        if (ImGui::MenuItem("Build", "F7", false, can_build))
             trigger_compile_ = true;
+
+        if (ImGui::MenuItem("Build All", nullptr, false, can_build))
+            trigger_compile_all_ = true;
 
         if (ImGui::MenuItem("Cancel", nullptr,
                             false, compiler::CompileSession::Get().IsRunning()))

@@ -47,6 +47,22 @@ void OutputPanel::Render() {
     ImGui::BeginChild("##output_scroll", ImVec2(0, 0), false,
                       ImGuiWindowFlags_HorizontalScrollbar);
 
+    // ── Lint diagnostics ─────────────────────────────────────────────────────
+    for (const auto& diag : lint_diags_) {
+        bool is_error = (diag.severity == codegen::LintSeverity::Error);
+        if (filter_index_ == 1 && !is_error)  continue;
+        if (filter_index_ == 2 && is_error)   continue;
+        if (filter_index_ == 3)               continue; // lint is not "Info"
+        ImVec4 colour = is_error
+            ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
+            : ImVec4(1.0f, 0.85f, 0.0f, 1.0f);
+        const char* prefix = is_error ? "[LINT ERROR] " : "[LINT WARN]  ";
+        ImGui::PushStyleColor(ImGuiCol_Text, colour);
+        ImGui::TextUnformatted((std::string(prefix) + diag.message).c_str());
+        ImGui::PopStyleColor();
+    }
+
+    // ── Compiler output lines ─────────────────────────────────────────────────
     const auto& lines = session.GetLines();
     for (const auto& cl : lines) {
         using compiler::LineKind;
@@ -102,6 +118,10 @@ void OutputPanel::Render() {
     ImGui::End();
 
     RenderFatalErrorModal();
+}
+
+void OutputPanel::SetDiagnostics(const std::vector<codegen::LintDiagnostic>& diags) {
+    lint_diags_ = diags;
 }
 
 void OutputPanel::RenderFatalErrorModal() {

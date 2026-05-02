@@ -8,9 +8,11 @@
 #include "ui/SettingsModal.h"
 #include "ui/NewProjectDialog.h"
 #include "codegen/DirtyFlag.h"
+#include "codegen/LintPass.h"
 
 #include <imgui.h>
 #include <string>
+#include <vector>
 
 namespace ui {
 
@@ -46,7 +48,11 @@ private:
     NewProjectDialog  new_project_dialog_;
 
     // Compile trigger state
-    bool trigger_compile_   = false;
+    bool trigger_compile_     = false;
+    bool trigger_compile_all_ = false;
+
+    // Lint diagnostics (task 3.14)
+    std::vector<codegen::LintDiagnostic> last_lint_diags_;
 
     // Codegen state
     codegen::DirtyFlag codegen_dirty_; // starts dirty

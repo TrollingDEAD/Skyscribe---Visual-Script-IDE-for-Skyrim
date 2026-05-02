@@ -136,6 +136,26 @@ void DeleteFunctionCmd::Undo(ScriptGraph& g) {
         *f->body_graph = *func_.body_graph;
 }
 
+// ── AddPropertyCmd ────────────────────────────────────────────────────────────
+
+void AddPropertyCmd::Execute(ScriptGraph& g) {
+    g.AddProperty(prop_.name, prop_.type, prop_.kind, prop_.default_value);
+}
+void AddPropertyCmd::Undo(ScriptGraph& g) {
+    g.RemoveProperty(prop_.name);
+}
+
+// ── DeletePropertyCmd ─────────────────────────────────────────────────────────
+
+void DeletePropertyCmd::Execute(ScriptGraph& g) {
+    PropertyDefinition* p = g.FindProperty(prop_.name);
+    if (p) prop_ = *p;
+    g.RemoveProperty(prop_.name);
+}
+void DeletePropertyCmd::Undo(ScriptGraph& g) {
+    g.AddProperty(prop_.name, prop_.type, prop_.kind, prop_.default_value);
+}
+
 // ── UndoStack ─────────────────────────────────────────────────────────────────
 
 void UndoStack::Push(std::unique_ptr<ICommand> cmd) {
