@@ -62,6 +62,9 @@ struct EmitContext {
     int next_temp_index = 0;
     std::unordered_map<uint64_t, std::string> temp_for_output_pin;
     std::vector<std::string> temp_decls;
+    // Pre-computed: number of data-input pins connected to each output pin.
+    // Used to decide whether to hoist math/logic results to a temp var (≥2) or inline (1).
+    std::unordered_map<uint64_t, int> pin_consumer_count;
 };
 
 // Forward declarations
@@ -89,21 +92,43 @@ static std::string ResolveOutput(const graph::ScriptGraph& g,
     }
 
     if (!def->codegen_template.empty()) {
-        // 3.2: math/logic expression nodes are hoisted to temp vars per block.
+        // 3.2 / 3.3: math/logic expression nodes.
+        // Hoist to a temp var only when the output pin has ≥2 consumers (multi-consumer rule).
+        // Single-consumer outputs are inlined directly.
         if (ctx && def->category == graph::NodeCategory::Math) {
+            // Already hoisted in this emit pass?
             auto it = ctx->temp_for_output_pin.find(from_pin_id);
             if (it != ctx->temp_for_output_pin.end())
                 return it->second;
 
-            std::string expr = SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
-            std::string temp_name = "_t" + std::to_string(ctx->next_temp_index++);
-            const graph::Pin* out_pin = g.FindPin(from_pin_id);
-            const std::string type_name = out_pin ? PapyrusTypeName(out_pin->type) : "Auto";
-            ctx->temp_for_output_pin[from_pin_id] = temp_name;
-            ctx->temp_decls.push_back(type_name + " " + temp_name + " = " + expr);
-            return temp_name;
+            int consumers = 0;
+            auto cit = ctx->pin_consumer_count.find(from_pin_id);
+            if (cit != ctx->pin_consumer_count.end()) consumers = cit->second;
+
+            if (consumers >= 2) {
+                std::string expr = SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
+                std::string temp_name = "_t" + std::to_string(ctx->next_temp_index++);
+                const graph::Pin* out_pin = g.FindPin(from_pin_id);
+                const std::string type_name = out_pin ? PapyrusTypeName(out_pin->type) : "Auto";
+                ctx->temp_for_output_pin[from_pin_id] = temp_name;
+                ctx->temp_decls.push_back(type_name + " " + temp_name + " = " + expr);
+                return temp_name;
+            }
+            // Single consumer: inline the expression
+            return SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
         }
         return SubstituteTemplate(g, src_id, def->codegen_template, resolving, ctx);
+    }
+
+    // Special case: DeclareLocal.Ref → return the variable name from the Name input pin.
+    if (src->type_id == "builtin.DeclareLocal") {
+        for (const auto& p : src->pins) {
+            if (p.name == "Name" && !p.value.empty()) return p.value;
+        }
+        for (const auto& pd : def->pins) {
+            if (pd.name == "Name" && !pd.default_value.empty()) return pd.default_value;
+        }
+        return "kVar";
     }
 
     // No template: event parameter nodes or GetVariable-style nodes.
@@ -342,56 +367,31 @@ static void EmitStatement(const graph::ScriptGraph& g, uint64_t node_id,
 
 // ─── DeclareLocal hoisting ────────────────────────────────────────────────────
 
-// Collect every DeclareLocal node reachable via data connections from exec-chain nodes.
-static void CollectDeclareLocals(const graph::ScriptGraph& g,
-                                  const std::vector<uint64_t>& chain_nodes,
-                                  std::vector<uint64_t>& out_local_ids,
-                                  std::unordered_set<uint64_t>& visited_data) {
-    std::function<void(uint64_t)> scan = [&](uint64_t nid) {
-        const graph::ScriptNode* n = g.FindNode(nid);
-        if (!n) return;
-        for (const auto& pin : n->pins) {
-            if (pin.flow != graph::PinFlow::Data || pin.kind != graph::PinKind::Input)
-                continue;
-            for (const auto& conn : g.connections) {
-                if (conn.to_pin_id != pin.id) continue;
-                uint64_t src = graph::PinOwnerNodeId(conn.from_pin_id);
-                if (visited_data.count(src)) continue;
-                visited_data.insert(src);
-                const graph::ScriptNode* sn = g.FindNode(src);
-                if (!sn) continue;
-                if (sn->type_id == "builtin.DeclareLocal")
-                    out_local_ids.push_back(src);
-                scan(src);
-            }
-        }
-    };
-    for (uint64_t nid : chain_nodes)
-        scan(nid);
-}
-
-// Deeply scan an entire exec-chain (including branches) for DeclareLocals.
-static void CollectAllDeclareLocals(const graph::ScriptGraph& g,
-                                     uint64_t start_exec_pin,
-                                     std::vector<uint64_t>& out_local_ids,
-                                     std::unordered_set<uint64_t>& visited_data) {
+// Recursively collect DeclareLocal nodes reachable via exec-flow from start_exec_pin,
+// including nodes inside If/Else, While, and Sequence branches.
+static void CollectDeclareLocalsInChain(
+        const graph::ScriptGraph& g,
+        uint64_t start_exec_pin,
+        std::vector<uint64_t>& out_ids,
+        std::unordered_set<uint64_t>& visited) {
+    if (!start_exec_pin) return;
     auto result = GraphTraversal::Traverse(g, start_exec_pin);
-    CollectDeclareLocals(g, result.node_ids, out_local_ids, visited_data);
-
-    // Recurse into If/Else and While branches
     for (uint64_t nid : result.node_ids) {
         const graph::ScriptNode* n = g.FindNode(nid);
         if (!n) continue;
+        if (n->type_id == "builtin.DeclareLocal" && !visited.count(nid)) {
+            visited.insert(nid);
+            out_ids.push_back(nid);
+        }
+        // Recurse into conditional / loop / sequence sub-chains
         for (const auto& pin : n->pins) {
-            if (pin.flow == graph::PinFlow::Execution && pin.kind == graph::PinKind::Output) {
-                // Skip "Out" / "Completed" — those are already in the main chain result
-                // Only recurse into branch pins
-                if (n->type_id == "builtin.IfElse" ||
-                    (n->type_id == "builtin.WhileLoop" && pin.name == "Loop Body") ||
-                    n->type_id == "builtin.Sequence") {
-                    CollectAllDeclareLocals(g, pin.id, out_local_ids, visited_data);
-                }
-            }
+            if (pin.flow != graph::PinFlow::Execution || pin.kind != graph::PinKind::Output) continue;
+            bool is_branch =
+                (n->type_id == "builtin.IfElse"   && (pin.name == "True" || pin.name == "False")) ||
+                (n->type_id == "builtin.WhileLoop" &&  pin.name == "Loop Body") ||
+                (n->type_id == "builtin.Sequence");
+            if (is_branch)
+                CollectDeclareLocalsInChain(g, pin.id, out_ids, visited);
         }
     }
 }
@@ -433,24 +433,34 @@ static void EmitEventBody(const graph::ScriptGraph& g,
         }
     }
 
-    // Collect all DeclareLocal vars reachable from this event's chain
+    // Collect all DeclareLocal vars reachable via exec-flow from this event's chain
     std::vector<uint64_t> local_ids;
-    std::unordered_set<uint64_t> visited_data;
-    if (exec_pin) CollectAllDeclareLocals(g, exec_pin, local_ids, visited_data);
+    std::unordered_set<uint64_t> visited_decl;
+    if (exec_pin) CollectDeclareLocalsInChain(g, exec_pin, local_ids, visited_decl);
 
     // Emit hoisted local declarations at the top
     for (uint64_t lid : local_ids) {
         const graph::ScriptNode* ln = g.FindNode(lid);
         if (!ln) continue;
-        // The variable name comes from the "Ref" pin's value; fall back to "kLocal"
-        std::string var_name = "kLocal";
+        std::string var_name  = "kVar";
+        std::string var_type  = "Int";
+        std::string init_val;
         for (const auto& p : ln->pins) {
-            if (p.name == "Ref" && !p.value.empty()) { var_name = p.value; break; }
+            if (p.name == "Name"         && !p.value.empty()) var_name = p.value;
+            if (p.name == "Type"         && !p.value.empty()) var_type = p.value;
+            if (p.name == "InitialValue")                      init_val = p.value;
         }
-        out << indent_unit << "Auto " << var_name << "\n";
+        out << indent_unit << var_type << " " << var_name;
+        if (!init_val.empty()) out << " = " << init_val;
+        out << "\n";
     }
 
     EmitContext ctx;
+    // Pre-compute how many data consumers each output pin has (for the multi-consumer rule).
+    for (const auto& conn : g.connections) {
+        ctx.pin_consumer_count[conn.from_pin_id]++;
+    }
+
     std::ostringstream body_out;
     if (exec_pin) EmitBranch(g, exec_pin, indent_unit, indent_unit, ctx, body_out);
 

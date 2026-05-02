@@ -458,16 +458,23 @@ TEST_CASE("Generate resolves chained data expressions", "[codegen]") {
 }
 
 TEST_CASE("Generate hoists math expression into temp variable", "[codegen]") {
+    // AddInt.Result feeds TWO consumers → must be hoisted to a temp var (multi-consumer rule).
     ScriptGraph g = MakeGraph("TestScript");
     uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
-    uint64_t svar    = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t svar0   = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t svar1   = AddBuiltin(g, "builtin.SetVariable");
     uint64_t add_int = AddBuiltin(g, "builtin.AddInt");
-    ConnectExec(g, on_init, svar);
+    ConnectExec(g, on_init, svar0);
+    ConnectExec(g, svar0,   svar1);
 
-    // Set target variable for assignment
-    ScriptNode* sv_set = g.FindNode(svar);
-    for (auto& p : sv_set->pins)
-        if (p.name == "Variable") p.value = "iResult";
+    // Set target variable names
+    auto set_var_name = [&](uint64_t id, const char* name) {
+        ScriptNode* sv = g.FindNode(id);
+        for (auto& p : sv->pins)
+            if (p.name == "Variable") { p.value = name; return; }
+    };
+    set_var_name(svar0, "iA");
+    set_var_name(svar1, "iB");
 
     // Set A and B defaults on AddInt
     ScriptNode* an = g.FindNode(add_int);
@@ -476,19 +483,24 @@ TEST_CASE("Generate hoists math expression into temp variable", "[codegen]") {
         if (p.name == "B") p.value = "2";
     }
 
-    // Connect AddInt.Result -> SetVariable.Value
-    uint64_t result_out = 0, value_in = 0;
+    // Connect AddInt.Result -> both SetVariable nodes' Value input (dual consumer)
+    uint64_t result_out = 0;
     for (const auto& p : an->pins)
         if (p.name == "Result") { result_out = p.id; break; }
-    const ScriptNode* sv = g.FindNode(svar);
-    for (const auto& p : sv->pins)
-        if (p.name == "Value") { value_in = p.id; break; }
-    REQUIRE(result_out); REQUIRE(value_in);
-    g.Connect(result_out, value_in);
+    REQUIRE(result_out);
+
+    for (auto sv_id : {svar0, svar1}) {
+        const ScriptNode* sv = g.FindNode(sv_id);
+        for (const auto& p : sv->pins) {
+            if (p.name == "Value") { REQUIRE(g.Connect(result_out, p.id) != 0); break; }
+        }
+    }
 
     auto res = PapyrusStringBuilder::Generate(g);
+    // Temp var must be declared (hoisted) and referenced in both assignments
     CHECK(Contains(res.source, "Int _t0 = 1 + 2"));
-    CHECK(Contains(res.source, "iResult = _t0"));
+    CHECK(Contains(res.source, "iA = _t0"));
+    CHECK(Contains(res.source, "iB = _t0"));
 }
 
 TEST_CASE("Generate emits Sequence branches in declaration order", "[codegen]") {
@@ -542,30 +554,110 @@ TEST_CASE("Generate emits properties", "[codegen]") {
 // ── 3.3 Variable hoisting (DeclareLocal) ─────────────────────────────────────
 
 TEST_CASE("Generate hoists DeclareLocal to top of event", "[codegen]") {
+    // An isolated DeclareLocal (not exec-connected) should not appear as a statement.
+    ScriptGraph g = MakeGraph("TestScript");
+    AddBuiltin(g, "builtin.OnInit");
+    AddBuiltin(g, "builtin.DeclareLocal");  // not connected
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK_FALSE(Contains(result.source, "builtin.DeclareLocal"));
+}
+
+TEST_CASE("DeclareLocal in exec chain is hoisted with correct type and initial value", "[codegen]") {
     ScriptGraph g = MakeGraph("TestScript");
     uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
-    uint64_t declare = AddBuiltin(g, "builtin.DeclareLocal");
+    uint64_t decl    = AddBuiltin(g, "builtin.DeclareLocal");
+    uint64_t notif   = AddBuiltin(g, "builtin.Notification");
+    ConnectExec(g, on_init, decl);
+    ConnectExec(g, decl, notif);
 
-    // Set variable name
-    ScriptNode* dn = g.FindNode(declare);
-    for (auto& p : dn->pins)
-        if (p.name == "Ref") { p.value = "kCounter"; break; }
+    ScriptNode* dn = g.FindNode(decl);
+    for (auto& p : dn->pins) {
+        if (p.name == "Name")         p.value = "kCounter";
+        if (p.name == "Type")         p.value = "Int";
+        if (p.name == "InitialValue") p.value = "0";
+    }
 
-    // Connect DeclareLocal.Ref -> SetVariable.Variable (data connection)
-    uint64_t notif = AddBuiltin(g, "builtin.Notification");
-    ConnectExec(g, on_init, notif);
-
-    uint64_t ref_pin = 0;
-    for (const auto& p : dn->pins) if (p.name == "Ref") { ref_pin = p.id; break; }
-    REQUIRE(ref_pin);
-
-    // Just have DeclareLocal in the graph connected to something
-    // The hoisting should emit "Auto kCounter" inside the event block
     auto result = PapyrusStringBuilder::Generate(g);
-    // If DeclareLocal is referenced by a data-in pin, it gets hoisted
-    // Without a connection, it's just an isolated node — not hoisted
-    // Test that DeclareLocal itself doesn't appear as a statement
+    // Declaration must appear (hoisted) and be before the Notification statement
+    CHECK(Contains(result.source, "Int kCounter = 0"));
+    auto decl_pos  = result.source.find("Int kCounter");
+    auto notif_pos = result.source.find("Debug.Notification");
+    REQUIRE(decl_pos  != std::string::npos);
+    REQUIRE(notif_pos != std::string::npos);
+    CHECK(decl_pos < notif_pos);
+    // DeclareLocal must not appear as an inline statement
     CHECK_FALSE(Contains(result.source, "builtin.DeclareLocal"));
+}
+
+TEST_CASE("Single-consumer math output is inlined, no temp var", "[codegen]") {
+    ScriptGraph g = MakeGraph("TestScript");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t svar    = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t add_int = AddBuiltin(g, "builtin.AddInt");
+    ConnectExec(g, on_init, svar);
+
+    ScriptNode* sv = g.FindNode(svar);
+    for (auto& p : sv->pins)
+        if (p.name == "Variable") p.value = "iResult";
+
+    ScriptNode* an = g.FindNode(add_int);
+    for (auto& p : an->pins) {
+        if (p.name == "A") p.value = "3";
+        if (p.name == "B") p.value = "4";
+    }
+
+    // Single connection: AddInt.Result → SetVariable.Value
+    uint64_t result_out = 0, value_in = 0;
+    for (const auto& p : an->pins)
+        if (p.name == "Result") { result_out = p.id; break; }
+    for (const auto& p : g.FindNode(svar)->pins)
+        if (p.name == "Value") { value_in = p.id; break; }
+    REQUIRE(result_out); REQUIRE(value_in);
+    REQUIRE(g.Connect(result_out, value_in) != 0);
+
+    auto res = PapyrusStringBuilder::Generate(g);
+    // Inlined: no "_t0 =" declaration; expression used directly
+    CHECK_FALSE(Contains(res.source, "_t0"));
+    CHECK(Contains(res.source, "iResult = 3 + 4"));
+}
+
+TEST_CASE("Dual-consumer math output hoisted to temp var", "[codegen]") {
+    ScriptGraph g = MakeGraph("TestScript");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t svar0   = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t svar1   = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t add_int = AddBuiltin(g, "builtin.AddInt");
+    ConnectExec(g, on_init, svar0);
+    ConnectExec(g, svar0, svar1);
+
+    auto set_var = [&](uint64_t id, const char* name) {
+        ScriptNode* n = g.FindNode(id);
+        for (auto& p : n->pins)
+            if (p.name == "Variable") { p.value = name; return; }
+    };
+    set_var(svar0, "iA"); set_var(svar1, "iB");
+
+    ScriptNode* an = g.FindNode(add_int);
+    for (auto& p : an->pins) {
+        if (p.name == "A") p.value = "5";
+        if (p.name == "B") p.value = "6";
+    }
+
+    uint64_t result_out = 0;
+    for (const auto& p : an->pins)
+        if (p.name == "Result") { result_out = p.id; break; }
+    REQUIRE(result_out);
+    for (auto sv_id : {svar0, svar1}) {
+        const ScriptNode* sv = g.FindNode(sv_id);
+        for (const auto& p : sv->pins)
+            if (p.name == "Value") { REQUIRE(g.Connect(result_out, p.id) != 0); break; }
+    }
+
+    auto res = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(res.source, "Int _t0 = 5 + 6"));
+    CHECK(Contains(res.source, "iA = _t0"));
+    CHECK(Contains(res.source, "iB = _t0"));
 }
 
 // ── 3.4 Edge cases ────────────────────────────────────────────────────────────

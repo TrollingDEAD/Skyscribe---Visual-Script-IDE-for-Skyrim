@@ -170,8 +170,14 @@ void BuiltinNodes::RegisterAll() {
     }
     {
         auto d = N("builtin.DeclareLocal", "Declare Local", NodeCategory::Variable,
-                   "Declares a local variable (hoisted to script top).");
-        d.pins = { DataOut("Ref", PinType::Unknown) };
+                   "Declares a typed local variable, hoisted to the top of the event/function block.");
+        d.pins = {
+            ExecIn(), ExecOut(),
+            DataIn("Name", PinType::String, "kVar",     "Variable name"),
+            DataIn("Type", PinType::String, "Int",      "Papyrus type (Int, Float, Bool, String, Actor, …)"),
+            DataIn("InitialValue", PinType::String, "", "Optional initial value"),
+            DataOut("Ref", PinType::Unknown,             "Reference to the declared variable"),
+        };
         Reg(std::move(d));
     }
     {

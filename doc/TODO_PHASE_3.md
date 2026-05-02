@@ -107,22 +107,22 @@ src/codegen/PapyrusStringBuilder.cpp
 
 > ROADMAP §55 (variable scope), §3 (data flow)
 
-- [ ] Within `PapyrusStringBuilder`, before emitting the body of an event/function block, collect all temp variables that will be needed:
+- [x] Within `PapyrusStringBuilder`, before emitting the body of an event/function block, collect all temp variables that will be needed:
   - Every data-output pin that feeds more than one downstream node → assigned to a named temp var (e.g. `_t0`, `_t1`)
   - Every `Declare Local` node in the traversal order → hoisted to the top of the block
   - Every temp var from `If`/`While` condition expressions → hoisted
-- [ ] Temp variable naming: sequential `_t0`, `_t1` … per event/function scope
-- [ ] `Declare Local` nodes:
+- [x] Temp variable naming: sequential `_t0`, `_t1` … per event/function scope
+- [x] `Declare Local` nodes:
   - Pin: `name` (string), `type` (PapyrusType), optional `value`
   - Emits at top of block: `Actor akTarget` or `Int iCount = 0`
-- [ ] **Multi-consumer temp var rule** (ROADMAP §72):
+- [x] **Multi-consumer temp var rule** (ROADMAP §72):
   - If a node's output is consumed by exactly one downstream node → inline it in the expression (no temp var)
   - If consumed by ≥2 downstream nodes → assign to a temp var, reference the var in each consumer
-- [ ] **Unit tests** (expand `tests/test_codegen.cpp`):
+- [x] **Unit tests** (expand `tests/test_codegen.cpp`):
   - Single-consumer output → inlined, no temp var declared
   - Dual-consumer output → temp var declared at top of block
   - `Declare Local` node → declaration hoisted above first use
-- [ ] Acceptance: all 3+ new tests pass; generated code has no use-before-declare errors
+- [x] Acceptance: all 3+ new tests pass; generated code has no use-before-declare errors
 
 ---
 
