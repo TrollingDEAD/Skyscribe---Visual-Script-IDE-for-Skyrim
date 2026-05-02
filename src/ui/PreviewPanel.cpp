@@ -1,13 +1,25 @@
 #include "ui/PreviewPanel.h"
 #include "codegen/LintPass.h"
+#include "codegen/PapyrusLexer.h"
 
 #include <imgui.h>
 #include <string>
 
 namespace ui {
 
+PreviewPanel::PreviewPanel()
+{
+    editor_.SetReadOnly(true);
+    editor_.SetPalette(TextEditor::GetDarkPalette());
+}
+
 void PreviewPanel::SetSource(const std::string& src) {
     source_ = src;
+    if (!lang_set_) {
+        editor_.SetLanguageDefinition(codegen::PapyrusLexer::GetLanguageDefinition());
+        lang_set_ = true;
+    }
+    editor_.SetText(src);
 }
 
 void PreviewPanel::SetDiagnostics(const std::vector<codegen::LintDiagnostic>& diags) {
@@ -43,18 +55,12 @@ void PreviewPanel::Render() {
     }
     ImGui::Separator();
 
-    // ── Source text ────────────────────────────────────────────────────────
+    // ── Source text (syntax-highlighted via ImGuiColorTextEdit) ───────────
     if (source_.empty()) {
         ImGui::TextDisabled("(no source generated)");
     } else {
         ImVec2 avail = ImGui::GetContentRegionAvail();
-        // Reserve a few pixels at the bottom for the status line
-        ImGui::InputTextMultiline(
-            "##preview_src",
-            const_cast<char*>(source_.c_str()),
-            source_.size() + 1,
-            ImVec2(avail.x, avail.y - 4.0f),
-            ImGuiInputTextFlags_ReadOnly);
+        editor_.Render("##preview", ImVec2(avail.x, avail.y - 4.0f), false);
     }
 
     ImGui::End();

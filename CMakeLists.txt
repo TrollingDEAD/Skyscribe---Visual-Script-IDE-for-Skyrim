@@ -22,6 +22,16 @@ target_include_directories(imgui_node_editor PUBLIC
 target_link_libraries(imgui_node_editor PUBLIC imgui::imgui)
 target_compile_definitions(imgui_node_editor PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
 
+# ── ImGuiColorTextEdit (vendored) ─────────────────────────────────────────────
+add_library(imgui_color_text_edit STATIC
+    third_party/ImGuiColorTextEdit/TextEditor.cpp
+)
+target_include_directories(imgui_color_text_edit PUBLIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ImGuiColorTextEdit"
+)
+target_link_libraries(imgui_color_text_edit PUBLIC imgui::imgui)
+target_compile_definitions(imgui_color_text_edit PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN)
+
 # ── Shared logic library (compiler + project — used by main exe and tests) ────
 file(GLOB_RECURSE SKYSCRIBE_LIB_SOURCES
     "src/compiler/*.cpp" "src/compiler/*.h"
@@ -33,7 +43,7 @@ add_library(SkyscribeLib STATIC ${SKYSCRIBE_LIB_SOURCES})
 target_include_directories(SkyscribeLib PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
 )
-target_link_libraries(SkyscribeLib PUBLIC nlohmann_json::nlohmann_json imgui_node_editor)
+target_link_libraries(SkyscribeLib PUBLIC nlohmann_json::nlohmann_json imgui_node_editor imgui_color_text_edit)
 target_compile_definitions(SkyscribeLib PUBLIC NOMINMAX WIN32_LEAN_AND_MEAN _WIN32_WINNT=0x0A00)
 target_compile_features(SkyscribeLib PUBLIC cxx_std_17)
 

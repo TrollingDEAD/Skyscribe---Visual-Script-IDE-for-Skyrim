@@ -930,3 +930,57 @@ TEST_CASE("Cross-script call with typed return gets ReturnValue output pin", "[c
     BuiltinNodes::SyncCrossScriptNodes({}); // cleanup
     scriptB.RemoveFunction("GetLevel");
 }
+
+// ─── PapyrusLexer tests ──────────────────────────────────────────────────────
+#include "codegen/PapyrusLexer.h"
+#include <cstring>
+
+TEST_CASE("PapyrusLexer has keyword Event stored as uppercase", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    // TextEditor uppercases identifiers before keyword lookup when mCaseSensitive==false
+    CHECK(lang.mKeywords.count("EVENT") > 0);
+}
+
+TEST_CASE("PapyrusLexer has semicolon single-line comment", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    CHECK(lang.mSingleLineComment == ";");
+}
+
+TEST_CASE("PapyrusLexer is case-insensitive", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    CHECK(lang.mCaseSensitive == false);
+}
+
+TEST_CASE("PapyrusLexer tokenize classifies quoted literal as String", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    REQUIRE(lang.mTokenize != nullptr);
+    const char* src = "\"Hello\"";
+    const char* ob = nullptr; const char* oe = nullptr;
+    TextEditor::PaletteIndex color = TextEditor::PaletteIndex::Default;
+    bool ok = lang.mTokenize(src, src + std::strlen(src), ob, oe, color);
+    CHECK(ok);
+    CHECK(color == TextEditor::PaletteIndex::String);
+    CHECK((oe - ob) == 7);
+}
+
+TEST_CASE("PapyrusLexer tokenize classifies integer as Number", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    REQUIRE(lang.mTokenize != nullptr);
+    const char* src = "42";
+    const char* ob = nullptr; const char* oe = nullptr;
+    TextEditor::PaletteIndex color = TextEditor::PaletteIndex::Default;
+    bool ok = lang.mTokenize(src, src + std::strlen(src), ob, oe, color);
+    CHECK(ok);
+    CHECK(color == TextEditor::PaletteIndex::Number);
+}
+
+TEST_CASE("PapyrusLexer tokenize classifies plain word as Identifier", "[lexer]") {
+    auto lang = codegen::PapyrusLexer::GetLanguageDefinition();
+    REQUIRE(lang.mTokenize != nullptr);
+    const char* src = "PlayerRef";
+    const char* ob = nullptr; const char* oe = nullptr;
+    TextEditor::PaletteIndex color = TextEditor::PaletteIndex::Default;
+    bool ok = lang.mTokenize(src, src + std::strlen(src), ob, oe, color);
+    CHECK(ok);
+    CHECK(color == TextEditor::PaletteIndex::Identifier);
+}
