@@ -22,7 +22,7 @@ The following Phase 2 outputs must be stable before Phase 3 work begins:
 
 ## Tasks
 
-### 3.1 — Graph Traversal (DFS execution-flow walker) `P0`
+### 3.1 — Graph Traversal (DFS execution-flow walker) `P0` ✅
 
 > ROADMAP §53, §11
 
@@ -58,7 +58,7 @@ tests/test_codegen.cpp   (created here; expanded in 3.2)
 
 ---
 
-### 3.2 — Papyrus String Builder `P0`
+### 3.2 — Papyrus String Builder `P0` ✅
 
 > ROADMAP §3 (data flow), §18 (codegen templates), §38, §69
 
@@ -103,7 +103,7 @@ src/codegen/PapyrusStringBuilder.cpp
 
 ---
 
-### 3.3 — Variable Hoisting `P0`
+### 3.3 — Variable Hoisting `P0` ✅ (DeclareLocal hoisting)
 
 > ROADMAP §55 (variable scope), §3 (data flow)
 
@@ -126,7 +126,7 @@ src/codegen/PapyrusStringBuilder.cpp
 
 ---
 
-### 3.4 — Code Generation Edge Cases `P0`
+### 3.4 — Code Generation Edge Cases `P0` ✅
 
 > ROADMAP §11, §38
 
@@ -150,7 +150,7 @@ src/codegen/PapyrusStringBuilder.cpp
 
 ---
 
-### 3.5 — Dirty-Flag System `P1`
+### 3.5 — Dirty-Flag System `P1` ✅
 
 > ROADMAP §3 (dirty flag), §22 (`codegen.live_preview_enabled`)
 
@@ -203,7 +203,7 @@ src/codegen/PapyrusLexer.cpp
 
 ---
 
-### 3.7 — Live Preview Panel Integration `P0`
+### 3.7 — Live Preview Panel Integration `P0` ✅
 
 > ROADMAP §3 (data flow), §2 (`ImGuiColorTextEdit`)
 
@@ -308,7 +308,7 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.11 — Property Declaration Panel `P0`
+### 3.11 — Property Declaration Panel `P0` ✅ (PropertyDefinition model + codegen; UI panel in backlog)
 
 > ROADMAP §21
 
@@ -370,7 +370,7 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.13 — Property Code Emission `P0`
+### 3.13 — Property Code Emission `P0` ✅
 
 > ROADMAP §21
 
@@ -381,7 +381,7 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.14 — Pre-Compile Lint Pass `P0`
+### 3.14 — Pre-Compile Lint Pass `P0` ✅ (14 rules)
 
 > ROADMAP §29, §57
 
@@ -431,7 +431,7 @@ src/codegen/LintPass.cpp
 
 ---
 
-### 3.15 — Compile Button & Compiler Integration `P0`
+### 3.15 — Compile Button & Compiler Integration `P0` ✅
 
 > ROADMAP §75 (Compiler Invocation Sequence), §44, §45, §83
 
