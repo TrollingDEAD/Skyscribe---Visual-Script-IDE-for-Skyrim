@@ -34,12 +34,16 @@ public:
     // Called automatically when the active script changes.
     void ResetEditMode();
 
+    // Called every frame by MainWindow; controls whether live-preview banner is shown.
+    void SetLivePreviewEnabled(bool enabled) { live_preview_enabled_ = enabled; }
+
 private:
     TextEditor  editor_;
-    bool        lang_set_           = false;
-    bool        edit_mode_          = false;
-    bool        has_manual_edits_   = false;
-    bool        confirm_sync_open_  = false;
+    bool        lang_set_              = false;
+    bool        edit_mode_             = false;
+    bool        has_manual_edits_      = false;
+    bool        confirm_sync_open_     = false;
+    bool        live_preview_enabled_  = true;
     std::string source_;            // last generated source (always up-to-date)
     int         error_count_   = 0;
     int         warning_count_ = 0;

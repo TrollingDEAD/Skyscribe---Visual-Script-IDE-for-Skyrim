@@ -32,8 +32,9 @@ void Settings::Load(const std::string& config_path) {
             import_dirs = j["import_dirs"].get<std::vector<std::string>>();
         }
 
-        autosave_enabled    = j.value("autosave_enabled",    true);
-        autosave_interval_s = j.value("autosave_interval_s", 300);
+        autosave_enabled      = j.value("autosave_enabled",      true);
+        autosave_interval_s   = j.value("autosave_interval_s",   300);
+        live_preview_enabled  = j.value("live_preview_enabled",  true);
 
 
         if (j.contains("window")) {
@@ -65,8 +66,9 @@ void Settings::Save(const std::string& config_path) const {
     j["ck_data_path"]      = ck_data_path;
     j["output_dir"]        = output_dir;
     j["import_dirs"]       = import_dirs;
-    j["autosave_enabled"]  = autosave_enabled;
-    j["autosave_interval_s"] = autosave_interval_s;
+    j["autosave_enabled"]     = autosave_enabled;
+    j["autosave_interval_s"]  = autosave_interval_s;
+    j["live_preview_enabled"] = live_preview_enabled;
     j["window"] = {
         {"x", window_x}, {"y", window_y},
         {"w", window_w}, {"h", window_h}

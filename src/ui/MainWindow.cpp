@@ -93,15 +93,20 @@ void MainWindow::Render() {
     // ── Live codegen for preview ──────────────────────────────────────────────
     {
         auto& proj = project::Project::Get();
+        const bool live_preview = app::Settings::Get().live_preview_enabled;
+        preview_.SetLivePreviewEnabled(live_preview);
+
         if (proj.IsOpen() && !proj.Scripts().empty()) {
             int active = proj.ActiveScriptIndex();
             int node_count = (active >= 0 && active < (int)proj.Scripts().size())
                 ? (int)proj.Scripts()[active].nodes.size() : -1;
             // Regenerate when: script switched, node count changed, or project dirtied.
-            if (active != last_codegen_script_idx_ ||
+            // Skipped entirely when live_preview_enabled is false.
+            if (live_preview && (
+                active != last_codegen_script_idx_ ||
                 node_count != last_script_node_count_ ||
                 proj.IsDirty() ||
-                codegen_dirty_.IsSet())
+                codegen_dirty_.IsSet()))
             {
                 // Reset edit-mode override when the user switches to a different script.
                 if (active != last_codegen_script_idx_)

@@ -154,15 +154,15 @@ src/codegen/PapyrusStringBuilder.cpp
 
 > ROADMAP §3 (dirty flag), §22 (`codegen.live_preview_enabled`)
 
-- [ ] Create `src/codegen/DirtyFlag.h`:
+- [x] Create `src/codegen/DirtyFlag.h`:
   - `class DirtyFlag { bool dirty_ = true; void Set(); void Clear(); bool Is() const; }`
   - Header-only; simple bool wrapper with clear semantics
-- [ ] Integrate into `GraphEditorPanel`:
+- [x] Integrate into `GraphEditorPanel`:
   - Every graph mutation (node add/remove, connection add/remove, pin value change, identity bar edit) calls `dirty_flag_.Set()`
   - `RenderCanvas()` checks `dirty_flag_.Is()` before calling `PapyrusStringBuilder::Generate()`
   - If `codegen.live_preview_enabled` is false in Settings, skip automatic regeneration; show `[Preview paused]` text in preview panel
-- [ ] `PapyrusStringBuilder::Generate()` result is stored in `std::string last_generated_` on `GraphEditorPanel`; passed to `PreviewPanel::SetSource()`
-- [ ] Acceptance: graph mutation triggers exactly one regen; no regen happens on non-mutating frames; toggling `live_preview_enabled` takes effect immediately
+- [x] `PapyrusStringBuilder::Generate()` result is stored in `std::string last_generated_` on `GraphEditorPanel`; passed to `PreviewPanel::SetSource()`
+- [x] Acceptance: graph mutation triggers exactly one regen; no regen happens on non-mutating frames; toggling `live_preview_enabled` takes effect immediately
 
 **Files to create:**
 ```

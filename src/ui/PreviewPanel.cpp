@@ -106,6 +106,12 @@ void PreviewPanel::Render() {
     }
 
     // ── Status bar ─────────────────────────────────────────────────────────
+    if (!live_preview_enabled_) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.55f, 0.55f, 1.0f));
+        ImGui::TextUnformatted("[Live preview disabled]");
+        ImGui::PopStyleColor();
+        ImGui::SameLine();
+    }
     if (error_count_ > 0) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.35f, 0.35f, 1.0f));
         ImGui::Text("%d error(s)", error_count_);

@@ -26,8 +26,9 @@ void SettingsModal::Open() {
     ck_data_path_        = s.ck_data_path;
     output_dir_          = s.output_dir;
     import_dirs_         = s.import_dirs;
-    autosave_enabled_    = s.autosave_enabled;
-    autosave_interval_s_ = s.autosave_interval_s;
+    autosave_enabled_      = s.autosave_enabled;
+    autosave_interval_s_   = s.autosave_interval_s;
+    live_preview_enabled_  = s.live_preview_enabled;
     selected_import_dir_ = -1;
     validation_errors_.clear();
 
@@ -70,8 +71,9 @@ void SettingsModal::Render() {
         s.ck_data_path       = ck_data_path_;
         s.output_dir         = output_dir_;
         s.import_dirs        = import_dirs_;
-        s.autosave_enabled   = autosave_enabled_;
-        s.autosave_interval_s = autosave_interval_s_;
+        s.autosave_enabled     = autosave_enabled_;
+        s.autosave_interval_s  = autosave_interval_s_;
+        s.live_preview_enabled = live_preview_enabled_;
         validation_errors_ = s.Validate();
         // Only close if there are no P0-critical errors (we still save on warning).
         LOG_INFO("Settings saved");
@@ -202,6 +204,14 @@ void SettingsModal::RenderAutosaveTab() {
     if (autosave_interval_s_ < 10)  autosave_interval_s_ = 10;
     if (autosave_interval_s_ > 3600) autosave_interval_s_ = 3600;
     ImGui::EndDisabled();
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextUnformatted("Codegen");
+    ImGui::Spacing();
+    ImGui::Checkbox("Live preview enabled", &live_preview_enabled_);
+    if (ImGui::IsItemHovered())
+        ImGui::SetTooltip("Disable to pause automatic code regeneration.\nUseful for large graphs.");
 }
 
 // ── Win32 pickers ─────────────────────────────────────────────────────────────

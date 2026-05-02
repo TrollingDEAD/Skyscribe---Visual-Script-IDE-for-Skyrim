@@ -27,6 +27,9 @@ public:
     bool autosave_enabled    = true;
     int  autosave_interval_s = 300; // default 5 minutes
 
+    // Codegen
+    bool live_preview_enabled = true; // false = skip auto-regen; show [Preview paused]
+
     // Window state
     int  window_x = -1;  // -1 = use CW_USEDEFAULT
     int  window_y = -1;

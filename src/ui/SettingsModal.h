@@ -36,8 +36,9 @@ private:
     std::string              ck_data_path_;
     std::string              output_dir_;
     std::vector<std::string> import_dirs_;
-    bool                     autosave_enabled_    = true;
-    int                      autosave_interval_s_ = 300;
+    bool                     autosave_enabled_      = true;
+    int                      autosave_interval_s_   = 300;
+    bool                     live_preview_enabled_  = true;
 
     // Validation errors for the working copy
     std::vector<app::ValidationError> validation_errors_;
