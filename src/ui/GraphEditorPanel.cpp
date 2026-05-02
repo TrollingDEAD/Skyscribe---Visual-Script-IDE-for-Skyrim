@@ -74,6 +74,7 @@ namespace ui {
 
 GraphEditorPanel::~GraphEditorPanel() {
     if (ctx_) ne::DestroyEditor(ctx_);
+    for (auto& kv : func_ctxs_) if (kv.second) ne::DestroyEditor(kv.second);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -130,6 +131,13 @@ void GraphEditorPanel::Render() {
         std::strncpy(extends_buf_, g.extends.c_str(),     sizeof(extends_buf_) - 1);
         name_buf_[sizeof(name_buf_) - 1]       = '\0';
         extends_buf_[sizeof(extends_buf_) - 1] = '\0';
+
+        // Clean up function editor contexts for old script
+        for (auto& kv : func_ctxs_) if (kv.second) ne::DestroyEditor(kv.second);
+        func_ctxs_.clear();
+        func_positioned_nodes_.clear();
+        active_func_tab_ = -1;
+        func_tab_script_ = g.script_name;
     }
 
     ImGui::SetNextItemWidth(200.0f);
@@ -147,8 +155,95 @@ void GraphEditorPanel::Render() {
 
     ImGui::Separator();
 
+    // ── Function tabs (task 3.9) ──────────────────────────────────────────────
+    // Clamp active_func_tab_ in case a function was removed externally
+    if (active_func_tab_ >= static_cast<int>(g.functions.size()))
+        active_func_tab_ = -1;
+
+    if (ImGui::BeginTabBar("##func_tabs")) {
+        // "Event Graph" tab
+        ImGuiTabItemFlags ev_flags = (active_func_tab_ == -1)
+            ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+        if (ImGui::BeginTabItem("Event Graph", nullptr, ev_flags)) {
+            active_func_tab_ = -1;
+            ImGui::EndTabItem();
+        }
+        // Per-function tabs
+        for (int i = 0; i < static_cast<int>(g.functions.size()); ++i) {
+            bool open = true;
+            ImGuiTabItemFlags fl = (active_func_tab_ == i)
+                ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            if (ImGui::BeginTabItem(g.functions[i].name.c_str(), &open, fl)) {
+                if (active_func_tab_ != i) active_func_tab_ = i;
+                ImGui::EndTabItem();
+            }
+            if (!open) {
+                // User clicked [x] — delete this function
+                graph::FunctionDefinition copy = g.functions[i];
+                auto cmd = std::make_unique<graph::DeleteFunctionCmd>(copy);
+                cmd->Execute(g);
+                undo_.Push(std::move(cmd));
+                proj.MarkDirty();
+                if (active_func_tab_ >= static_cast<int>(g.functions.size()))
+                    active_func_tab_ = -1;
+            }
+        }
+        // "+" button to create a new function
+        if (ImGui::TabItemButton("+", ImGuiTabItemFlags_Trailing))
+            func_add_dialog_open_ = true;
+        ImGui::EndTabBar();
+    }
+
+    // Add Function modal
+    if (func_add_dialog_open_) {
+        ImGui::OpenPopup("AddFunction##modal");
+        func_add_dialog_open_ = false;
+    }
+    if (ImGui::BeginPopupModal("AddFunction##modal", nullptr,
+                               ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::InputText("Name##funcname", func_name_buf_, sizeof(func_name_buf_));
+        if (ImGui::Button("Add")) {
+            if (func_name_buf_[0] != '\0') {
+                auto& f = g.AddFunction(func_name_buf_);
+                // Push undo command with a snapshot of the newly added function
+                graph::FunctionDefinition snapshot = f;
+                undo_.Push(std::make_unique<graph::AddFunctionCmd>(snapshot));
+                func_name_buf_[0] = '\0';
+                proj.MarkDirty();
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel")) {
+            func_name_buf_[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
     // ── Canvas ────────────────────────────────────────────────────────────────
-    RenderCanvas(g);
+    if (active_func_tab_ == -1 || active_func_tab_ >= static_cast<int>(g.functions.size())) {
+        // Event graph
+        RenderCanvas(g);
+    } else {
+        auto& func = g.functions[static_cast<size_t>(active_func_tab_)];
+        // Get or create per-function editor context
+        if (func_ctxs_.find(func.name) == func_ctxs_.end()) {
+            ne::Config cfg; cfg.SettingsFile = nullptr;
+            func_ctxs_[func.name] = ne::CreateEditor(&cfg);
+        }
+        // Swap in function editor context + positioned set
+        auto* saved_ctx = ctx_;
+        ctx_ = func_ctxs_[func.name];
+        auto saved_pos = std::move(positioned_nodes_);
+        positioned_nodes_ = std::move(func_positioned_nodes_);
+
+        RenderCanvas(*func.body_graph);
+
+        func_positioned_nodes_ = std::move(positioned_nodes_);
+        positioned_nodes_      = std::move(saved_pos);
+        ctx_                   = saved_ctx;
+    }
 
     ImGui::End();
 }

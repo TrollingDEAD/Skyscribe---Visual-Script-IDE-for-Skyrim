@@ -444,6 +444,35 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
     // ── Properties ────────────────────────────────────────────────────────────
     EmitProperties(g, out);
 
+    // ── Functions (task 3.9) ──────────────────────────────────────────────────
+    for (const auto& func : g.functions) {
+        // Function header: "Float Function GetMod()" or "Function DoThing()"
+        if (func.return_type != graph::PinType::Unknown)
+            out << PapyrusTypeName(func.return_type) << " ";
+        out << "Function " << func.name << "(";
+        for (size_t i = 0; i < func.parameters.size(); ++i) {
+            if (i) out << ", ";
+            out << PapyrusTypeName(func.parameters[i].type)
+                << " " << func.parameters[i].name;
+        }
+        out << ")";
+        if (func.is_global) out << " Global";
+        out << "\n";
+
+        // Emit body graph (same as event body)
+        if (func.body_graph) {
+            // Find the function entry node in the body graph
+            auto entry_id_str = "script." + g.script_name + ".entry." + func.name;
+            for (const auto& sn : func.body_graph->nodes) {
+                if (sn.type_id == entry_id_str) {
+                    EmitEventBody(*func.body_graph, sn.id, out);
+                    break;
+                }
+            }
+        }
+        out << "EndFunction\n\n";
+    }
+
     // ── Events ────────────────────────────────────────────────────────────────
     auto event_ids = GraphTraversal::FindEventNodes(g);
 

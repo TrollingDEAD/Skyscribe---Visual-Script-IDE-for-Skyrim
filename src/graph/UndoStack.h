@@ -95,6 +95,25 @@ struct MacroCmd : ICommand {
     std::string Description()    const override { return desc_; }
 };
 
+// Records an AddFunction operation for undo/redo.
+// Execute = re-add (using stored definition); Undo = remove by name.
+struct AddFunctionCmd : ICommand {
+    FunctionDefinition func_;
+    explicit AddFunctionCmd(const FunctionDefinition& f) : func_(f) {}
+    void Execute(ScriptGraph& g) override;
+    void Undo(ScriptGraph& g)    override;
+    std::string Description()    const override { return "Add Function"; }
+};
+
+// Records a DeleteFunction operation for undo/redo.
+struct DeleteFunctionCmd : ICommand {
+    FunctionDefinition func_;
+    explicit DeleteFunctionCmd(const FunctionDefinition& f) : func_(f) {}
+    void Execute(ScriptGraph& g) override;
+    void Undo(ScriptGraph& g)    override;
+    std::string Description()    const override { return "Delete Function"; }
+};
+
 // ── UndoStack ─────────────────────────────────────────────────────────────────
 
 class UndoStack {

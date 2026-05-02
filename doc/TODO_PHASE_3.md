@@ -239,7 +239,7 @@ src/ui/GraphEditorPanel.h/.cpp
 
 ---
 
-### 3.9 — User-Defined Functions `P1`
+### ✅ 3.9 — User-Defined Functions `P1`
 
 > ROADMAP §19
 

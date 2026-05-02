@@ -106,6 +106,36 @@ void MacroCmd::Undo(ScriptGraph& g) {
         (*it)->Undo(g);
 }
 
+// ── AddFunctionCmd ────────────────────────────────────────────────────────────
+
+void AddFunctionCmd::Execute(ScriptGraph& g) {
+    // Re-add via AddFunction (re-registers nodes), then restore body_graph content.
+    g.AddFunction(func_.name, func_.return_type, func_.parameters, func_.is_global);
+    FunctionDefinition* f = g.FindFunction(func_.name);
+    if (f && func_.body_graph)
+        *f->body_graph = *func_.body_graph;
+}
+
+void AddFunctionCmd::Undo(ScriptGraph& g) {
+    g.RemoveFunction(func_.name);
+}
+
+// ── DeleteFunctionCmd ─────────────────────────────────────────────────────────
+
+void DeleteFunctionCmd::Execute(ScriptGraph& g) {
+    // Save current state before removing (for redo correctness if called again)
+    FunctionDefinition* f = g.FindFunction(func_.name);
+    if (f) func_ = *f;
+    g.RemoveFunction(func_.name);
+}
+
+void DeleteFunctionCmd::Undo(ScriptGraph& g) {
+    g.AddFunction(func_.name, func_.return_type, func_.parameters, func_.is_global);
+    FunctionDefinition* f = g.FindFunction(func_.name);
+    if (f && func_.body_graph)
+        *f->body_graph = *func_.body_graph;
+}
+
 // ── UndoStack ─────────────────────────────────────────────────────────────────
 
 void UndoStack::Push(std::unique_ptr<ICommand> cmd) {

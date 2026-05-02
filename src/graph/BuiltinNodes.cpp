@@ -538,4 +538,13 @@ void BuiltinNodes::SyncPropertyNodes(const std::string& script_name,
     }
 }
 
+// ── Function node removal ─────────────────────────────────────────────────────
+
+void BuiltinNodes::RemoveFunctionNodes(const std::string& script_name,
+                                        const std::string& func_name) {
+    NodeRegistry::Get().Unregister("script." + script_name + ".entry."  + func_name);
+    NodeRegistry::Get().Unregister("script." + script_name + ".return." + func_name);
+    NodeRegistry::Get().Unregister("script." + script_name + ".call."   + func_name);
+}
+
 } // namespace graph

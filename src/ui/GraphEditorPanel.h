@@ -7,6 +7,7 @@
 #include <imgui_node_editor.h>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -74,6 +75,14 @@ private:
     ClipboardPayload clipboard_;
     bool             has_clipboard_  = false;
     int              paste_offset_   = 0; // incremented on each paste
+
+    // Function tab state (task 3.9)
+    int          active_func_tab_     = -1; // -1 = event graph
+    std::string  func_tab_script_;         // detect script switch
+    std::unordered_map<std::string, ax::NodeEditor::EditorContext*> func_ctxs_;
+    std::unordered_set<uint64_t>   func_positioned_nodes_;
+    char         func_name_buf_[129]  = {};
+    bool         func_add_dialog_open_ = false;
 };
 
 } // namespace ui

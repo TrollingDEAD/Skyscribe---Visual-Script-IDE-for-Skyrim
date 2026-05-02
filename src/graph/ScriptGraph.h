@@ -2,6 +2,7 @@
 
 #include "graph/NodeDefinition.h"
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 #include <optional>
@@ -18,6 +19,30 @@ struct PropertyDefinition {
     PropertyKind kind          = PropertyKind::Auto;
     std::string  default_value;
     std::string  tooltip;
+};
+
+// ── Function definition (task 3.9) ────────────────────────────────────────────
+//
+// body_graph is heap-allocated to break the recursive struct definition cycle
+// (ScriptGraph owns FunctionDefinition which owns ScriptGraph).
+
+struct ScriptGraph; // forward declaration
+
+struct FunctionDefinition {
+    std::string                name;
+    PinType                    return_type = PinType::Unknown; // Unknown = None (void)
+    std::vector<PinDefinition> parameters;
+    bool                       is_global   = false;
+    std::unique_ptr<ScriptGraph> body_graph;
+
+    // Destructor / move defined in .cpp (ScriptGraph must be complete there).
+    FunctionDefinition();
+    ~FunctionDefinition();
+    FunctionDefinition(FunctionDefinition&&) noexcept;
+    FunctionDefinition& operator=(FunctionDefinition&&) noexcept;
+    // Deep copy
+    FunctionDefinition(const FunctionDefinition&);
+    FunctionDefinition& operator=(const FunctionDefinition&);
 };
 
 // ── Runtime instances ─────────────────────────────────────────────────────────
@@ -57,6 +82,7 @@ struct ScriptGraph {
     std::vector<ScriptNode>         nodes;
     std::vector<Connection>         connections;
     std::vector<PropertyDefinition> properties;
+    std::vector<FunctionDefinition> functions;
 
     uint64_t next_node_id = 1; // monotonically increasing; never reused
     uint64_t next_conn_id = 1;
@@ -79,6 +105,25 @@ struct ScriptGraph {
 
     // Remove all connections touching a specific pin.
     void DisconnectPin(uint64_t pin_id);
+
+    // ── Function helpers ──────────────────────────────────────────────────────
+
+    // Add a function. Places a FunctionEntry node in the body_graph.
+    // Returns a reference to the new definition (valid until next mutation).
+    FunctionDefinition& AddFunction(const std::string& name,
+                                     PinType return_type = PinType::Unknown,
+                                     const std::vector<PinDefinition>& params = {},
+                                     bool is_global = false);
+
+    // Remove a function by name. No-op if not found.
+    void RemoveFunction(const std::string& name);
+
+    // Rename a function. No-op if old_name not found.
+    void RenameFunction(const std::string& old_name, const std::string& new_name);
+
+    // Returns pointer to the function with this name, or nullptr.
+    FunctionDefinition*       FindFunction(const std::string& name);
+    const FunctionDefinition* FindFunction(const std::string& name) const;
 
     // Read-only queries ────────────────────────────────────────────────────────
 

@@ -4,6 +4,7 @@
 #include "codegen/PapyrusStringBuilder.h"
 #include "codegen/LintPass.h"
 #include "graph/BuiltinNodes.h"
+#include "graph/GraphSerializer.h"
 #include "graph/NodeRegistry.h"
 #include "graph/ScriptGraph.h"
 
@@ -789,4 +790,63 @@ TEST_CASE("Generate emits unique sorted Import lines", "[import]") {
     NodeRegistry::Get().Unregister("test.NodeA1");
     NodeRegistry::Get().Unregister("test.NodeA2");
     NodeRegistry::Get().Unregister("test.NodeB1");
+}
+
+// ── 3.9 User-Defined Functions ────────────────────────────────────────────────
+
+TEST_CASE("AddFunction registers Entry/Return/Call nodes", "[functions]") {
+    ScriptGraph g = MakeGraph("FuncRegScript");
+    g.AddFunction("MyFunc");
+    CHECK(NodeRegistry::Get().Find("script.FuncRegScript.entry.MyFunc") != nullptr);
+    CHECK(NodeRegistry::Get().Find("script.FuncRegScript.return.MyFunc") != nullptr);
+    CHECK(NodeRegistry::Get().Find("script.FuncRegScript.call.MyFunc")   != nullptr);
+    g.RemoveFunction("MyFunc");
+}
+
+TEST_CASE("Generate emits Function/EndFunction block", "[functions]") {
+    ScriptGraph g = MakeGraph("FuncEmitScript");
+    g.AddFunction("DoThing");
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Function DoThing()"));
+    CHECK(Contains(result.source, "EndFunction"));
+    g.RemoveFunction("DoThing");
+}
+
+TEST_CASE("Generate emits typed Function with return type", "[functions]") {
+    ScriptGraph g = MakeGraph("FuncTypedScript");
+    g.AddFunction("GetValue", PinType::Float);
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Float Function GetValue()"));
+    g.RemoveFunction("GetValue");
+}
+
+TEST_CASE("Function emitted before Event block", "[functions]") {
+    ScriptGraph g = MakeGraph("FuncOrderScript");
+    g.AddFunction("Helper");
+    AddBuiltin(g, "builtin.OnInit");
+    auto result  = PapyrusStringBuilder::Generate(g);
+    auto func_pos  = result.source.find("Function Helper");
+    auto event_pos = result.source.find("Event OnInit");
+    CHECK(func_pos  != std::string::npos);
+    CHECK(event_pos != std::string::npos);
+    CHECK(func_pos < event_pos);
+    g.RemoveFunction("Helper");
+}
+
+TEST_CASE("GraphSerializer round-trips FunctionDefinition", "[functions]") {
+    ScriptGraph g = MakeGraph("SerFuncScript");
+    g.AddFunction("Round", PinType::Int);
+    auto j = GraphSerializer::Save(g);
+    // Unregister before load to test re-registration path
+    NodeRegistry::Get().Unregister("script.SerFuncScript.entry.Round");
+    NodeRegistry::Get().Unregister("script.SerFuncScript.return.Round");
+    NodeRegistry::Get().Unregister("script.SerFuncScript.call.Round");
+    auto g2 = GraphSerializer::Load(j);
+    REQUIRE(g2.functions.size() == 1);
+    CHECK(g2.functions[0].name        == "Round");
+    CHECK(g2.functions[0].return_type == PinType::Int);
+    CHECK(NodeRegistry::Get().Find("script.SerFuncScript.entry.Round")  != nullptr);
+    CHECK(NodeRegistry::Get().Find("script.SerFuncScript.return.Round") != nullptr);
+    CHECK(NodeRegistry::Get().Find("script.SerFuncScript.call.Round")   != nullptr);
+    g2.RemoveFunction("Round");
 }

@@ -17,6 +17,11 @@ struct BuiltinNodes {
     // Pass an empty props vector to just remove existing entries.
     static void SyncPropertyNodes(const std::string& script_name,
                                    const std::vector<PropertyDefinition>& props);
+
+    // Remove all dynamic function nodes (entry/return/call) for a script.
+    // Called on project close or when rebuilding from serialised data.
+    static void RemoveFunctionNodes(const std::string& script_name,
+                                     const std::string& func_name);
 };
 
 } // namespace graph
