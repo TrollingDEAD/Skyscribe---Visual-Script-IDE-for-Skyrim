@@ -294,7 +294,7 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.10 — Cross-Script Call Node Generation `P1`
+### ✅ 3.10 — Cross-Script Call Node Generation `P1`
 
 > ROADMAP §19 (Cross-Script Call), §10 (Multi-Script Project)
 

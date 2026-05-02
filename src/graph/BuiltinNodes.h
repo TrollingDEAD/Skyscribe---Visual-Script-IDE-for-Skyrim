@@ -22,6 +22,11 @@ struct BuiltinNodes {
     // Called on project close or when rebuilding from serialised data.
     static void RemoveFunctionNodes(const std::string& script_name,
                                      const std::string& func_name);
+
+    // Register cross-script call nodes ("project.<ScriptName>.<FuncName>") for
+    // every function defined across all scripts in the project.
+    // Clears all previously registered "project.*" nodes before re-registering.
+    static void SyncCrossScriptNodes(const std::vector<ScriptGraph>& scripts);
 };
 
 } // namespace graph

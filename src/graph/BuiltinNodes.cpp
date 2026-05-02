@@ -547,4 +547,70 @@ void BuiltinNodes::RemoveFunctionNodes(const std::string& script_name,
     NodeRegistry::Get().Unregister("script." + script_name + ".call."   + func_name);
 }
 
+// ── Cross-script call node synchronisation (task 3.10) ────────────────────────
+
+void BuiltinNodes::SyncCrossScriptNodes(const std::vector<ScriptGraph>& scripts) {
+    auto& reg = NodeRegistry::Get();
+
+    // Remove all previously registered cross-script nodes
+    std::vector<std::string> to_remove;
+    for (const auto& def : reg.AllNodes())
+        if (def.type_id.rfind("project.", 0) == 0)
+            to_remove.push_back(def.type_id);
+    for (const auto& id : to_remove)
+        reg.Unregister(id);
+
+    // Re-register one call node per function per script
+    for (const auto& script : scripts) {
+        for (const auto& func : script.functions) {
+            NodeDefinition d;
+            d.type_id      = "project." + script.script_name + "." + func.name;
+            d.display_name = script.script_name + "::" + func.name;
+            d.category     = NodeCategory::Custom;
+            d.tooltip      = "Call " + func.name + " on a " + script.script_name + " reference";
+
+            // Build codegen template: ({Self} as ScriptName).FuncName({p0}, {p1}, ...)
+            std::string tmpl = "({Self} as " + script.script_name + ")." + func.name + "(";
+            for (size_t i = 0; i < func.parameters.size(); ++i) {
+                if (i) tmpl += ", ";
+                tmpl += "{" + func.parameters[i].name + "}";
+            }
+            tmpl += ")";
+            d.codegen_template = tmpl;
+
+            // Pins
+            PinDefinition exec_in;
+            exec_in.name = "In"; exec_in.kind = PinKind::Input;
+            exec_in.flow = PinFlow::Execution; exec_in.type = PinType::Exec;
+            d.pins.push_back(exec_in);
+
+            PinDefinition self_pin;
+            self_pin.name = "Self"; self_pin.kind = PinKind::Input;
+            self_pin.flow = PinFlow::Data; self_pin.type = PinType::ObjectRef;
+            self_pin.tooltip = "Reference of type " + script.script_name;
+            d.pins.push_back(self_pin);
+
+            for (const auto& param : func.parameters) {
+                PinDefinition p = param;
+                p.kind = PinKind::Input; p.flow = PinFlow::Data;
+                d.pins.push_back(p);
+            }
+
+            PinDefinition exec_out;
+            exec_out.name = "Out"; exec_out.kind = PinKind::Output;
+            exec_out.flow = PinFlow::Execution; exec_out.type = PinType::Exec;
+            d.pins.push_back(exec_out);
+
+            if (func.return_type != PinType::Unknown) {
+                PinDefinition ret;
+                ret.name = "ReturnValue"; ret.kind = PinKind::Output;
+                ret.flow = PinFlow::Data; ret.type = func.return_type;
+                d.pins.push_back(ret);
+            }
+
+            reg.Register(std::move(d));
+        }
+    }
+}
+
 } // namespace graph

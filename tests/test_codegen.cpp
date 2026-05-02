@@ -850,3 +850,83 @@ TEST_CASE("GraphSerializer round-trips FunctionDefinition", "[functions]") {
     CHECK(NodeRegistry::Get().Find("script.SerFuncScript.call.Round")   != nullptr);
     g2.RemoveFunction("Round");
 }
+
+// ── 3.10 Cross-Script Call Node Generation ────────────────────────────────────
+
+TEST_CASE("SyncCrossScriptNodes registers project call nodes", "[crossscript]") {
+    ScriptGraph scriptB = MakeGraph("ScriptB");
+    scriptB.AddFunction("Greet");
+    std::vector<ScriptGraph> scripts = { scriptB };
+    BuiltinNodes::SyncCrossScriptNodes(scripts);
+
+    const auto* def = NodeRegistry::Get().Find("project.ScriptB.Greet");
+    REQUIRE(def != nullptr);
+    CHECK(def->display_name == "ScriptB::Greet");
+
+    // Check it has a Self DataIn pin and an exec pair
+    bool has_self = false, has_exec_in = false, has_exec_out = false;
+    for (const auto& p : def->pins) {
+        if (p.name == "Self" && p.flow == PinFlow::Data && p.kind == PinKind::Input)
+            has_self = true;
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Input)
+            has_exec_in = true;
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Output)
+            has_exec_out = true;
+    }
+    CHECK(has_self);
+    CHECK(has_exec_in);
+    CHECK(has_exec_out);
+
+    BuiltinNodes::SyncCrossScriptNodes({}); // cleanup
+    scriptB.RemoveFunction("Greet");
+}
+
+TEST_CASE("SyncCrossScriptNodes clears old nodes on re-sync", "[crossscript]") {
+    ScriptGraph sA = MakeGraph("ScriptA");
+    sA.AddFunction("DoA");
+    BuiltinNodes::SyncCrossScriptNodes({ sA });
+    CHECK(NodeRegistry::Get().Find("project.ScriptA.DoA") != nullptr);
+
+    // Re-sync with empty list removes all cross-script nodes
+    BuiltinNodes::SyncCrossScriptNodes({});
+    CHECK(NodeRegistry::Get().Find("project.ScriptA.DoA") == nullptr);
+
+    sA.RemoveFunction("DoA");
+}
+
+TEST_CASE("Cross-script call node emits cast+call codegen", "[crossscript]") {
+    // Script B defines a function
+    ScriptGraph scriptB = MakeGraph("NpcScript");
+    scriptB.AddFunction("SayHello");
+    BuiltinNodes::SyncCrossScriptNodes({ scriptB });
+
+    // Script A calls it
+    ScriptGraph gA = MakeGraph("PlayerScript");
+    uint64_t on_init  = AddBuiltin(gA, "builtin.OnInit");
+    uint64_t call_id  = gA.AddNode(*NodeRegistry::Get().Find("project.NpcScript.SayHello"));
+    ConnectExec(gA, on_init, call_id);
+
+    auto result = PapyrusStringBuilder::Generate(gA);
+    CHECK(Contains(result.source, "(None as NpcScript).SayHello()"));
+
+    BuiltinNodes::SyncCrossScriptNodes({}); // cleanup
+    scriptB.RemoveFunction("SayHello");
+}
+
+TEST_CASE("Cross-script call with typed return gets ReturnValue output pin", "[crossscript]") {
+    ScriptGraph scriptB = MakeGraph("QuestScript");
+    scriptB.AddFunction("GetLevel", PinType::Int);
+    BuiltinNodes::SyncCrossScriptNodes({ scriptB });
+
+    const auto* def = NodeRegistry::Get().Find("project.QuestScript.GetLevel");
+    REQUIRE(def != nullptr);
+
+    bool has_return_val = false;
+    for (const auto& p : def->pins)
+        if (p.name == "ReturnValue" && p.flow == PinFlow::Data && p.kind == PinKind::Output)
+            has_return_val = true;
+    CHECK(has_return_val);
+
+    BuiltinNodes::SyncCrossScriptNodes({}); // cleanup
+    scriptB.RemoveFunction("GetLevel");
+}

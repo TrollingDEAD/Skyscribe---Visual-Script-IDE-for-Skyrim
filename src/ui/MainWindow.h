@@ -55,6 +55,10 @@ private:
     int  last_prop_count_         = -1;
     std::string last_prop_script_;       // script name at last property sync
 
+    // Cross-script node sync tracking (task 3.10)
+    int  last_script_count_       = -1;
+    int  last_cross_func_total_   = -1; // sum of function counts across all scripts
+
     // Modals
     bool show_no_ck_modal_           = false;
     bool show_unsaved_changes_modal_ = false;

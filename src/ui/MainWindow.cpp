@@ -124,6 +124,20 @@ void MainWindow::Render() {
                         last_prop_script_ = g.script_name;
                     }
 
+                    // ── Sync cross-script call nodes in registry (task 3.10) ──
+                    {
+                        const auto& all = proj.Scripts();
+                        int sc = static_cast<int>(all.size());
+                        int fc = 0;
+                        for (const auto& s : all)
+                            fc += static_cast<int>(s.functions.size());
+                        if (sc != last_script_count_ || fc != last_cross_func_total_) {
+                            graph::BuiltinNodes::SyncCrossScriptNodes(all);
+                            last_script_count_     = sc;
+                            last_cross_func_total_ = fc;
+                        }
+                    }
+
                     auto lint = codegen::LintPass::Run(g);
                     preview_.SetDiagnostics(lint);
                     auto gen = codegen::PapyrusStringBuilder::Generate(g);
