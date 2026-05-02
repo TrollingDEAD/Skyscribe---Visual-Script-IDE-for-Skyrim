@@ -82,7 +82,11 @@ private:
     std::unordered_map<std::string, ax::NodeEditor::EditorContext*> func_ctxs_;
     std::unordered_set<uint64_t>   func_positioned_nodes_;
     char         func_name_buf_[129]  = {};
+    int          func_return_type_idx_ = 0; // 0 = None
     bool         func_add_dialog_open_ = false;
+    // Rename state
+    char         func_rename_buf_[129] = {};
+    int          func_rename_idx_      = -1; // which function is being renamed
 };
 
 } // namespace ui

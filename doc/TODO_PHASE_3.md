@@ -243,7 +243,7 @@ src/ui/GraphEditorPanel.h/.cpp
 
 > ROADMAP §19
 
-- [ ] Add `FunctionDefinition` to `src/graph/ScriptGraph.h`:
+- [x] Add `FunctionDefinition` to `src/graph/ScriptGraph.h`:
   ```cpp
   struct FunctionDefinition {
       std::string              name;
@@ -257,32 +257,32 @@ src/ui/GraphEditorPanel.h/.cpp
   - `AddFunction(name, return_type, params) → FunctionDefinition&`
   - `RemoveFunction(name)`
   - `RenameFunction(old_name, new_name)`
-- [ ] Add **Functions panel** UI strip above the canvas (below the Script Identity Bar):
+- [x] Add **Functions panel** UI strip above the canvas (below the Script Identity Bar):
   - `[+ Add Function]` button → opens inline dialog: name, return type, parameters list
   - Lists existing functions with `[✏] [🗑]` per entry
   - Clicking a function opens its `body_graph` as an additional **sub-canvas tab** within the script's tab
-- [ ] **Function Entry node** (auto-placed when function created):
+- [x] **Function Entry node** (auto-placed when function created):
   - One Exec-out pin + one data-output pin per parameter
   - Header: `<FunctionName>  [ENTRY]`
-- [ ] **Function Return node** (placed by user):
+- [x] **Function Return node** (placed by user):
   - One Exec-in pin + one data-input pin if `return_type != None`
   - Header: `Return  [RETURN]`
-- [ ] **Function Call node** (auto-generated in palette under "This Script › Functions"):
+- [x] **Function Call node** (auto-generated in palette under "This Script › Functions"):
   - Available within the same script's event graph
   - Exec-in + Exec-out + one data-input pin per parameter + one data-output pin for return value
-- [ ] Wire `PapyrusStringBuilder` to emit function blocks before Event blocks:
+- [x] Wire `PapyrusStringBuilder` to emit function blocks before Event blocks:
   ```papyrus
   Float Function GetDifficultyMod()
       Return 1.5
   EndFunction
   ```
-- [ ] Serialise `functions[]` in `GraphSerializer` (JSON array; same schema as main graph nodes/connections per function `body_graph`)
-- [ ] Add undo commands: `AddFunctionCmd`, `DeleteFunctionCmd` — push via `UndoStack`
-- [ ] **Unit tests** (new `tests/test_codegen.cpp` section):
+- [x] Serialise `functions[]` in `GraphSerializer` (JSON array; same schema as main graph nodes/connections per function `body_graph`)
+- [x] Add undo commands: `AddFunctionCmd`, `DeleteFunctionCmd` — push via `UndoStack`
+- [x] **Unit tests** (new `tests/test_codegen.cpp` section):
   - Function with `None` return → no `Return` pin emitted; `Function`/`EndFunction` block correct
   - Function with `Float` return → `Float Function ... EndFunction` header + `Return {value}`
   - Function with 2 parameters → parameter pins on Entry node; call node inputs match
-- [ ] Acceptance: 3+ tests pass; function sub-canvas opens; emitted code correct; serialises round-trip
+- [x] Acceptance: 3+ tests pass; function sub-canvas opens; emitted code correct; serialises round-trip
 
 **Files to modify:**
 ```

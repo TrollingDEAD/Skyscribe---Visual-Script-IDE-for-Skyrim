@@ -177,6 +177,13 @@ void GraphEditorPanel::Render() {
                 if (active_func_tab_ != i) active_func_tab_ = i;
                 ImGui::EndTabItem();
             }
+            // Right-click context menu: Rename
+            if (ImGui::IsItemHovered() && ImGui::IsMouseReleased(ImGuiMouseButton_Right)) {
+                func_rename_idx_ = i;
+                std::strncpy(func_rename_buf_, g.functions[i].name.c_str(), sizeof(func_rename_buf_) - 1);
+                func_rename_buf_[sizeof(func_rename_buf_) - 1] = '\0';
+                ImGui::OpenPopup("##RenameFunc");
+            }
             if (!open) {
                 // User clicked [x] — delete this function
                 graph::FunctionDefinition copy = g.functions[i];
@@ -198,13 +205,27 @@ void GraphEditorPanel::Render() {
     if (func_add_dialog_open_) {
         ImGui::OpenPopup("AddFunction##modal");
         func_add_dialog_open_ = false;
+        func_return_type_idx_ = 0;
+        func_name_buf_[0] = '\0';
     }
     if (ImGui::BeginPopupModal("AddFunction##modal", nullptr,
                                ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::InputText("Name##funcname", func_name_buf_, sizeof(func_name_buf_));
+        static const char* kReturnTypes[] = {
+            "None", "Int", "Float", "Bool", "String",
+            "ObjectReference", "Actor", "Form", "Quest"
+        };
+        static const graph::PinType kReturnPinTypes[] = {
+            graph::PinType::Unknown,  graph::PinType::Int,   graph::PinType::Float,
+            graph::PinType::Bool,     graph::PinType::String, graph::PinType::ObjectRef,
+            graph::PinType::Actor,    graph::PinType::Form,  graph::PinType::Quest
+        };
+        ImGui::Combo("Return Type", &func_return_type_idx_, kReturnTypes,
+                     static_cast<int>(std::size(kReturnTypes)));
         if (ImGui::Button("Add")) {
             if (func_name_buf_[0] != '\0') {
-                auto& f = g.AddFunction(func_name_buf_);
+                auto& f = g.AddFunction(func_name_buf_,
+                                        kReturnPinTypes[func_return_type_idx_]);
                 // Push undo command with a snapshot of the newly added function
                 graph::FunctionDefinition snapshot = f;
                 undo_.Push(std::make_unique<graph::AddFunctionCmd>(snapshot));
@@ -216,6 +237,43 @@ void GraphEditorPanel::Render() {
         ImGui::SameLine();
         if (ImGui::Button("Cancel")) {
             func_name_buf_[0] = '\0';
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
+    }
+
+    // Rename Function popup (right-click on tab)
+    if (ImGui::BeginPopup("##RenameFunc")) {
+        ImGui::TextUnformatted("Rename function:");
+        if (ImGui::InputText("##renameinput", func_rename_buf_, sizeof(func_rename_buf_),
+                             ImGuiInputTextFlags_EnterReturnsTrue)) {
+            if (func_rename_buf_[0] != '\0' && func_rename_idx_ >= 0 &&
+                func_rename_idx_ < static_cast<int>(g.functions.size())) {
+                const std::string old_name = g.functions[func_rename_idx_].name;
+                // Update editor context key
+                if (func_ctxs_.count(old_name)) {
+                    func_ctxs_[func_rename_buf_] = func_ctxs_[old_name];
+                    func_ctxs_.erase(old_name);
+                }
+                g.RenameFunction(old_name, func_rename_buf_);
+                proj.MarkDirty();
+                func_rename_idx_ = -1;
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("OK")) {
+            if (func_rename_buf_[0] != '\0' && func_rename_idx_ >= 0 &&
+                func_rename_idx_ < static_cast<int>(g.functions.size())) {
+                const std::string old_name = g.functions[func_rename_idx_].name;
+                if (func_ctxs_.count(old_name)) {
+                    func_ctxs_[func_rename_buf_] = func_ctxs_[old_name];
+                    func_ctxs_.erase(old_name);
+                }
+                g.RenameFunction(old_name, func_rename_buf_);
+                proj.MarkDirty();
+                func_rename_idx_ = -1;
+            }
             ImGui::CloseCurrentPopup();
         }
         ImGui::EndPopup();
