@@ -478,13 +478,63 @@ void BuiltinNodes::RegisterAll() {
                    DataOut("Result", PinType::Int) };
         Reg(std::move(d));
     }
-    {
-        auto d = N("builtin.RandomFloat", "Random Float", NodeCategory::Utility,
+    {        auto d = N("builtin.RandomFloat", "Random Float", NodeCategory::Utility,
                    "Returns a random float in [afMin, afMax].",
                    "Utility.RandomFloat({afMin}, {afMax})");
         d.pins = { DataIn("afMin", PinType::Float, "0.0"), DataIn("afMax", PinType::Float, "1.0"),
                    DataOut("Result", PinType::Float) };
         Reg(std::move(d));
+    }
+
+    // ── Self ──────────────────────────────────────────────────────────────────
+    {
+        auto d = N("builtin.GetSelf", "Self", NodeCategory::Variable,
+                   "Returns a reference to this script's owner object.",
+                   "Self");
+        d.pins = { DataOut("Self", PinType::ObjectRef) };
+        Reg(std::move(d));
+    }
+}
+
+// ── Property node synchronisation ─────────────────────────────────────────────
+
+void BuiltinNodes::SyncPropertyNodes(const std::string& script_name,
+                                      const std::vector<PropertyDefinition>& props) {
+    auto& reg = NodeRegistry::Get();
+    const std::string prefix = "script." + script_name + ".";
+
+    // Remove all existing property nodes for this script
+    std::vector<std::string> to_remove;
+    for (const auto& def : reg.AllNodes())
+        if (def.type_id.rfind(prefix, 0) == 0)
+            to_remove.push_back(def.type_id);
+    for (const auto& id : to_remove)
+        reg.Unregister(id);
+
+    // Re-register from current property list
+    for (const auto& prop : props) {
+        // Get Property node
+        {
+            NodeDefinition d;
+            d.type_id          = prefix + "get." + prop.name;
+            d.display_name     = "Get " + prop.name;
+            d.category         = NodeCategory::Variable;
+            d.tooltip          = "Read property " + prop.name;
+            d.codegen_template = prop.name; // bare identifier — no {token} needed
+            d.pins             = { DataOut(prop.name.c_str(), prop.type) };
+            reg.Register(std::move(d));
+        }
+        // Set Property node
+        {
+            NodeDefinition d;
+            d.type_id          = prefix + "set." + prop.name;
+            d.display_name     = "Set " + prop.name;
+            d.category         = NodeCategory::Variable;
+            d.tooltip          = "Write property " + prop.name;
+            d.codegen_template = prop.name + " = {Value}";
+            d.pins             = { ExecIn(), DataIn("Value", prop.type), ExecOut() };
+            reg.Register(std::move(d));
+        }
     }
 }
 

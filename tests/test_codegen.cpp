@@ -574,3 +574,219 @@ TEST_CASE("LintPass L07: division by zero warning", "[lint]") {
     for (const auto& d : diags) if (d.rule_id == "L07") { found = true; break; }
     CHECK(found);
 }
+
+// ── 3.12 Get/Set Property Nodes ───────────────────────────────────────────────
+
+TEST_CASE("SyncPropertyNodes registers Get/Set nodes in registry", "[propnodes]") {
+    PropertyDefinition prop;
+    prop.name = "TestProp";
+    prop.type = PinType::Int;
+    prop.kind = PropertyKind::Auto;
+
+    BuiltinNodes::SyncPropertyNodes("SyncTestScript", { prop });
+
+    const NodeDefinition* get_def = NodeRegistry::Get().Find("script.SyncTestScript.get.TestProp");
+    const NodeDefinition* set_def = NodeRegistry::Get().Find("script.SyncTestScript.set.TestProp");
+    REQUIRE(get_def != nullptr);
+    REQUIRE(set_def != nullptr);
+
+    // Get node: one DataOut pin named TestProp, Int type
+    REQUIRE(get_def->pins.size() == 1);
+    CHECK(get_def->pins[0].flow == PinFlow::Data);
+    CHECK(get_def->pins[0].kind == PinKind::Output);
+    CHECK(get_def->pins[0].type == PinType::Int);
+
+    // Set node: ExecIn + DataIn("Value") + ExecOut
+    bool has_exec_in = false, has_value_in = false, has_exec_out = false;
+    for (const auto& p : set_def->pins) {
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Input)  has_exec_in  = true;
+        if (p.flow == PinFlow::Data      && p.kind == PinKind::Input)  has_value_in = true;
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Output) has_exec_out = true;
+    }
+    CHECK(has_exec_in);
+    CHECK(has_value_in);
+    CHECK(has_exec_out);
+
+    BuiltinNodes::SyncPropertyNodes("SyncTestScript", {});
+}
+
+TEST_CASE("SyncPropertyNodes removes nodes when property deleted", "[propnodes]") {
+    PropertyDefinition prop;
+    prop.name = "TempProp";
+    prop.type = PinType::Bool;
+    prop.kind = PropertyKind::Auto;
+
+    BuiltinNodes::SyncPropertyNodes("SyncTestScript2", { prop });
+    REQUIRE(NodeRegistry::Get().Find("script.SyncTestScript2.get.TempProp") != nullptr);
+
+    BuiltinNodes::SyncPropertyNodes("SyncTestScript2", {});
+    CHECK(NodeRegistry::Get().Find("script.SyncTestScript2.get.TempProp") == nullptr);
+    CHECK(NodeRegistry::Get().Find("script.SyncTestScript2.set.TempProp") == nullptr);
+}
+
+TEST_CASE("GetProperty node codegen emits bare property name", "[propnodes]") {
+    PropertyDefinition prop;
+    prop.name = "MyActor";
+    prop.type = PinType::Actor;
+    prop.kind = PropertyKind::Auto;
+
+    BuiltinNodes::SyncPropertyNodes("PropCodegenScript", { prop });
+
+    ScriptGraph g = MakeGraph("PropCodegenScript", "ObjectReference");
+    uint64_t on_init  = AddBuiltin(g, "builtin.OnInit");
+    uint64_t svar     = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t get_prop = g.AddNode(*NodeRegistry::Get().Find("script.PropCodegenScript.get.MyActor"));
+    ConnectExec(g, on_init, svar);
+
+    // Connect GetProperty.MyActor -> SetVariable.Value
+    const ScriptNode* gp = g.FindNode(get_prop);
+    const ScriptNode* sv = g.FindNode(svar);
+    uint64_t prop_out = 0, val_in = 0;
+    for (const auto& p : gp->pins)
+        if (p.flow == PinFlow::Data && p.kind == PinKind::Output) { prop_out = p.id; break; }
+    for (const auto& p : sv->pins)
+        if (p.name == "Value") { val_in = p.id; break; }
+    REQUIRE(prop_out != 0); REQUIRE(val_in != 0);
+    g.Connect(prop_out, val_in);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "MyActor"));
+
+    BuiltinNodes::SyncPropertyNodes("PropCodegenScript", {});
+}
+
+TEST_CASE("SetProperty node codegen emits assignment", "[propnodes]") {
+    PropertyDefinition prop;
+    prop.name = "iCount";
+    prop.type = PinType::Int;
+    prop.kind = PropertyKind::Auto;
+
+    BuiltinNodes::SyncPropertyNodes("SetPropScript", { prop });
+
+    ScriptGraph g = MakeGraph("SetPropScript", "ObjectReference");
+    uint64_t on_init  = AddBuiltin(g, "builtin.OnInit");
+    uint64_t set_prop = g.AddNode(*NodeRegistry::Get().Find("script.SetPropScript.set.iCount"));
+    ConnectExec(g, on_init, set_prop);
+
+    ScriptNode* sp = g.FindNode(set_prop);
+    for (auto& p : sp->pins)
+        if (p.name == "Value") { p.value = "5"; break; }
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "iCount = 5"));
+
+    BuiltinNodes::SyncPropertyNodes("SetPropScript", {});
+}
+
+// ── 3.16 Self Pin ─────────────────────────────────────────────────────────────
+
+TEST_CASE("builtin.GetSelf is registered", "[self]") {
+    const NodeDefinition* def = NodeRegistry::Get().Find("builtin.GetSelf");
+    REQUIRE(def != nullptr);
+    CHECK(def->display_name == "Self");
+    CHECK(def->codegen_template == "Self");
+    REQUIRE(def->pins.size() == 1);
+    CHECK(def->pins[0].flow == PinFlow::Data);
+    CHECK(def->pins[0].kind == PinKind::Output);
+}
+
+TEST_CASE("GetSelf codegen emits Self keyword", "[self]") {
+    ScriptGraph g = MakeGraph("SelfTest", "Actor");
+    uint64_t on_init  = AddBuiltin(g, "builtin.OnInit");
+    uint64_t set_var  = AddBuiltin(g, "builtin.SetVariable");
+    uint64_t get_self = AddBuiltin(g, "builtin.GetSelf");
+    ConnectExec(g, on_init, set_var);
+
+    const ScriptNode* gs = g.FindNode(get_self);
+    const ScriptNode* sv = g.FindNode(set_var);
+    uint64_t self_out = 0, val_in = 0;
+    for (const auto& p : gs->pins)
+        if (p.flow == PinFlow::Data && p.kind == PinKind::Output) { self_out = p.id; break; }
+    for (const auto& p : sv->pins)
+        if (p.name == "Value") { val_in = p.id; break; }
+    REQUIRE(self_out != 0); REQUIRE(val_in != 0);
+    g.Connect(self_out, val_in);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Self"));
+}
+
+// ── 3.17 Import Statement Generation ─────────────────────────────────────────
+
+TEST_CASE("Generate emits no Import lines for builtins-only graph", "[import]") {
+    ScriptGraph g = MakeGraph("ImportTest");
+    AddBuiltin(g, "builtin.OnInit");
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK_FALSE(Contains(result.source, "Import "));
+}
+
+TEST_CASE("Generate emits Import line for node with source_script", "[import]") {
+    NodeDefinition fake;
+    fake.type_id          = "test.FakeReflected";
+    fake.display_name     = "FakeReflected";
+    fake.category         = NodeCategory::Custom;
+    fake.source_script    = "PapyrusExtender";
+    fake.codegen_template = "PapyrusExtender.DoThing()";
+    fake.pins = { PinDefinition{"In",  PinKind::Input,  PinFlow::Execution, PinType::Exec, "", ""},
+                  PinDefinition{"Out", PinKind::Output, PinFlow::Execution, PinType::Exec, "", ""} };
+    NodeRegistry::Get().Register(fake);
+
+    ScriptGraph g = MakeGraph("ImportTest2", "ObjectReference");
+    uint64_t on_init   = AddBuiltin(g, "builtin.OnInit");
+    uint64_t fake_node = AddBuiltin(g, "test.FakeReflected");
+    ConnectExec(g, on_init, fake_node);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Import PapyrusExtender"));
+
+    auto imp_pos   = result.source.find("Import PapyrusExtender");
+    auto event_pos = result.source.find("Event ");
+    CHECK(imp_pos   != std::string::npos);
+    CHECK(event_pos != std::string::npos);
+    CHECK(imp_pos < event_pos);
+
+    NodeRegistry::Get().Unregister("test.FakeReflected");
+}
+
+TEST_CASE("Generate emits unique sorted Import lines", "[import]") {
+    auto make_reflected = [](const std::string& tid, const std::string& src) {
+        NodeDefinition d;
+        d.type_id          = tid;
+        d.display_name     = tid;
+        d.category         = NodeCategory::Custom;
+        d.source_script    = src;
+        d.codegen_template = src + ".Fn()";
+        d.pins = { PinDefinition{"In",  PinKind::Input,  PinFlow::Execution, PinType::Exec, "", ""},
+                   PinDefinition{"Out", PinKind::Output, PinFlow::Execution, PinType::Exec, "", ""} };
+        return d;
+    };
+    NodeRegistry::Get().Register(make_reflected("test.NodeA1", "LibraryA"));
+    NodeRegistry::Get().Register(make_reflected("test.NodeA2", "LibraryA"));
+    NodeRegistry::Get().Register(make_reflected("test.NodeB1", "LibraryB"));
+
+    ScriptGraph g = MakeGraph("ImportTest3", "ObjectReference");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t a1 = AddBuiltin(g, "test.NodeA1");
+    uint64_t a2 = AddBuiltin(g, "test.NodeA2");
+    uint64_t b1 = AddBuiltin(g, "test.NodeB1");
+    ConnectExec(g, on_init, a1);
+    ConnectExec(g, a1, a2);
+    ConnectExec(g, a2, b1);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(Contains(result.source, "Import LibraryA"));
+    CHECK(Contains(result.source, "Import LibraryB"));
+
+    // LibraryA appears only once
+    auto pos1 = result.source.find("Import LibraryA");
+    auto pos2 = result.source.find("Import LibraryA", pos1 + 1);
+    CHECK(pos1 != std::string::npos);
+    CHECK(pos2 == std::string::npos);
+
+    // Alphabetical: LibraryA before LibraryB
+    CHECK(result.source.find("Import LibraryA") < result.source.find("Import LibraryB"));
+
+    NodeRegistry::Get().Unregister("test.NodeA1");
+    NodeRegistry::Get().Unregister("test.NodeA2");
+    NodeRegistry::Get().Unregister("test.NodeB1");
+}

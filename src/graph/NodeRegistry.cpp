@@ -14,6 +14,11 @@ void NodeRegistry::Register(NodeDefinition def) {
     dirty_ = true;
 }
 
+void NodeRegistry::Unregister(const std::string& type_id) {
+    if (map_.erase(type_id))
+        dirty_ = true;
+}
+
 const NodeDefinition* NodeRegistry::Find(const std::string& type_id) const {
     auto it = map_.find(type_id);
     return it != map_.end() ? &it->second : nullptr;

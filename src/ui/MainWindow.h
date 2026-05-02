@@ -52,6 +52,8 @@ private:
     codegen::DirtyFlag codegen_dirty_; // starts dirty
     int  last_codegen_script_idx_ = -1;
     int  last_script_node_count_  = -1;
+    int  last_prop_count_         = -1;
+    std::string last_prop_script_;       // script name at last property sync
 
     // Modals
     bool show_no_ck_modal_           = false;

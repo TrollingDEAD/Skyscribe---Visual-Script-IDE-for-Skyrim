@@ -5,6 +5,7 @@
 #include "compiler/CompileSession.h"
 #include "codegen/PapyrusStringBuilder.h"
 #include "codegen/LintPass.h"
+#include "graph/BuiltinNodes.h"
 
 #include <imgui_internal.h>
 #include <filesystem>
@@ -108,6 +109,21 @@ void MainWindow::Render() {
 
                 if (active >= 0 && active < (int)proj.Scripts().size()) {
                     const auto& g = proj.Scripts()[active];
+
+                    // ── Sync property nodes in registry (task 3.12) ────────────
+                    int prop_count = (int)g.properties.size();
+                    if (prop_count != last_prop_count_ ||
+                        g.script_name != last_prop_script_) {
+                        // If the script was renamed, clean up the old entries first
+                        if (!last_prop_script_.empty() &&
+                            last_prop_script_ != g.script_name) {
+                            graph::BuiltinNodes::SyncPropertyNodes(last_prop_script_, {});
+                        }
+                        graph::BuiltinNodes::SyncPropertyNodes(g.script_name, g.properties);
+                        last_prop_count_  = prop_count;
+                        last_prop_script_ = g.script_name;
+                    }
+
                     auto lint = codegen::LintPass::Run(g);
                     preview_.SetDiagnostics(lint);
                     auto gen = codegen::PapyrusStringBuilder::Generate(g);

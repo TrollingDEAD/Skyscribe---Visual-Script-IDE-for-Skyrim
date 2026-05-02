@@ -356,7 +356,7 @@ src/graph/UndoStack.h/.cpp
 
 ---
 
-### 3.12 — Get / Set Property Nodes `P0`
+### 3.12 — Get / Set Property Nodes `P0` ✅
 
 > ROADMAP §21 (Get/Set Property Nodes)
 
@@ -451,7 +451,7 @@ src/codegen/LintPass.cpp
 
 ---
 
-### 3.16 — `Self` Pin & `Self` Keyword `P1`
+### 3.16 — `Self` Pin & `Self` Keyword `P1` ✅
 
 > ROADMAP §64
 
@@ -464,7 +464,7 @@ src/codegen/LintPass.cpp
 
 ---
 
-### 3.17 — `Papyrus Import` Statement Generation `P1`
+### 3.17 — `Papyrus Import` Statement Generation `P1` ✅
 
 > ROADMAP §65
 

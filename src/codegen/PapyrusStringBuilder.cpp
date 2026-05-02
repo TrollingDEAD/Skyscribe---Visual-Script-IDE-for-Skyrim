@@ -3,6 +3,7 @@
 #include "graph/NodeRegistry.h"
 
 #include <functional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_set>
@@ -423,7 +424,22 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
     // ── Script header ─────────────────────────────────────────────────────────
     out << "Scriptname " << g.script_name;
     if (!g.extends.empty()) out << " extends " << g.extends;
-    out << "\n\n";
+    out << "\n";
+
+    // ── Import statements (task 3.17) ─────────────────────────────────────────
+    {
+        std::set<std::string> imports;
+        for (const auto& sn : g.nodes) {
+            const graph::NodeDefinition* def = graph::NodeRegistry::Get().Find(sn.type_id);
+            if (def && !def->source_script.empty())
+                imports.insert(def->source_script);
+        }
+        if (!imports.empty()) {
+            for (const auto& imp : imports)
+                out << "Import " << imp << "\n";
+        }
+    }
+    out << "\n";
 
     // ── Properties ────────────────────────────────────────────────────────────
     EmitProperties(g, out);

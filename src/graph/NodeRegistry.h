@@ -14,6 +14,9 @@ public:
     // Register a node definition. Overwrites if type_id already exists.
     void Register(NodeDefinition def);
 
+    // Unregister a node definition by type_id. No-op if not found.
+    void Unregister(const std::string& type_id);
+
     // Returns nullptr if type_id is not registered.
     const NodeDefinition* Find(const std::string& type_id) const;
 

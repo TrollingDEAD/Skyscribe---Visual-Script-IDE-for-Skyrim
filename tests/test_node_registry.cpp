@@ -8,7 +8,7 @@ struct RegFixture { RegFixture() { BuiltinNodes::RegisterAll(); } };
 static RegFixture s_reg_fixture;
 
 TEST_CASE("NodeRegistry has exactly 61 built-in nodes", "[registry]") {
-    REQUIRE(NodeRegistry::Get().Count() == 61);
+    REQUIRE(NodeRegistry::Get().Count() == 62);
 }
 
 TEST_CASE("NodeRegistry Find builtin.OnInit returns correct definition", "[registry]") {
