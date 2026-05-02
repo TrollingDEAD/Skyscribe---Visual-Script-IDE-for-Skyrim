@@ -5,17 +5,38 @@
 #include "project/Project.h"
 #include "app/Logger.h"
 
+#include "graph/PinType.h"
+
 #include <imgui_node_editor.h>
 #include <imgui_internal.h>
 #include <cstring>
 #include <cstdio>
 #include <algorithm>
+#include <limits>
+#include <unordered_map>
+#include <unordered_set>
+#include <optional>
 
 namespace ne = ax::NodeEditor;
 
 namespace {
 
 // ── Category helpers ──────────────────────────────────────────────────────────
+
+static const char* CategoryName(graph::NodeCategory cat) {
+    switch (cat) {
+    case graph::NodeCategory::Event:       return "Events";
+    case graph::NodeCategory::ControlFlow: return "Control Flow";
+    case graph::NodeCategory::Variable:    return "Variables";
+    case graph::NodeCategory::Math:        return "Math & Logic";
+    case graph::NodeCategory::Debug:       return "Debug";
+    case graph::NodeCategory::Actor:       return "Actor";
+    case graph::NodeCategory::Quest:       return "Quest / Story";
+    case graph::NodeCategory::Utility:     return "Utility / Timer";
+    case graph::NodeCategory::Custom:      return "Custom";
+    default:                               return "Other";
+    }
+}
 
 static ImVec4 CategoryColor(graph::NodeCategory cat) {
     switch (cat) {
@@ -166,8 +187,27 @@ void GraphEditorPanel::RenderCanvas(graph::ScriptGraph& g) {
     HandleDelete(g);
     HandleKeyboardShortcuts(g);
 
+    // ── Right-click on blank canvas → node picker ─────────────────────────────
+    if (ne::ShowBackgroundContextMenu()) {
+        picker_canvas_pos_  = ne::ScreenToCanvas(ImGui::GetMousePos());
+        picker_from_pin_id_ = 0;
+        picker_open_        = true;
+        picker_search_[0]   = '\0';
+    }
+
+    // ── Right-click on node → context menu ───────────────────────────────────
+    ne::NodeId hovered_node;
+    if (ne::ShowNodeContextMenu(&hovered_node)) {
+        ctx_node_id_ = hovered_node.Get();
+        ImGui::OpenPopup("##node_ctx");
+    }
+
     ne::End();
     ne::SetCurrentEditor(nullptr);
+
+    // ── Popups outside ne::Begin/End ──────────────────────────────────────────
+    RenderNodePicker(g, picker_canvas_pos_, picker_from_pin_id_);
+    RenderNodeContextMenu(g);
 
     // Check for drag-drop from ToolPalette (must be outside ne::Begin/End)
     AcceptPaletteDrop(g);
@@ -321,6 +361,22 @@ void GraphEditorPanel::HandleCreate(graph::ScriptGraph& g) {
             ne::RejectNewItem(ImVec4(0.9f, 0.2f, 0.2f, 1.0f), 2.0f);
         }
     }
+
+    // ── Pin drag released on blank canvas → filtered node picker ─────────────
+    ne::PinId dragged_pin;
+    if (ne::QueryNewNode(&dragged_pin)) {
+        ne::AcceptNewItem();
+        uint64_t pid = dragged_pin.Get();
+        // Normalise: we want the Output pin as the "from"
+        const graph::Pin* p = g.FindPin(pid);
+        if (p && p->kind == graph::PinKind::Output) {
+            picker_canvas_pos_  = ne::ScreenToCanvas(ImGui::GetMousePos());
+            picker_from_pin_id_ = pid;
+            picker_open_        = true;
+            picker_search_[0]   = '\0';
+        }
+    }
+
     ne::EndCreate();
 }
 
@@ -387,6 +443,41 @@ void GraphEditorPanel::HandleKeyboardShortcuts(graph::ScriptGraph& g) {
     // Shift+F = navigate to selection
     if (ImGui::IsKeyPressed(ImGuiKey_F) && io.KeyShift)
         ne::NavigateToSelection(false);
+
+    // Ctrl+Z = undo
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Z) && !io.KeyShift) {
+        if (undo_.CanUndo()) {
+            undo_.Undo(g);
+            positioned_nodes_.clear(); // positions may have changed
+            project::Project::Get().MarkDirty();
+        }
+    }
+
+    // Ctrl+Y / Ctrl+Shift+Z = redo
+    if (io.KeyCtrl && (ImGui::IsKeyPressed(ImGuiKey_Y) ||
+                       (io.KeyShift && ImGui::IsKeyPressed(ImGuiKey_Z)))) {
+        if (undo_.CanRedo()) {
+            undo_.Redo(g);
+            positioned_nodes_.clear();
+            project::Project::Get().MarkDirty();
+        }
+    }
+
+    // Ctrl+C = copy
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C) && !io.KeyShift)
+        CopySelected(g);
+
+    // Ctrl+X = cut
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_X))
+        CutSelected(g);
+
+    // Ctrl+V = paste
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V))
+        PasteClipboard(g);
+
+    // Ctrl+D = duplicate
+    if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_D))
+        DuplicateSelected(g);
 }
 
 // ── Palette drag-drop acceptance ──────────────────────────────────────────────
@@ -434,6 +525,385 @@ void GraphEditorPanel::SyncNodePositions() {
         }
     }
     ne::SetCurrentEditor(nullptr);
+}
+
+// ── Node Picker (right-click / pin-drag) ──────────────────────────────────────
+
+void GraphEditorPanel::RenderNodePicker(graph::ScriptGraph& g, ImVec2 canvas_pos,
+                                        uint64_t from_pin_id) {
+    if (!picker_open_) return;
+    ImGui::OpenPopup("##node_picker");
+    picker_open_ = false;
+
+    ImGui::SetNextWindowSize(ImVec2(280, 400), ImGuiCond_Appearing);
+    if (!ImGui::BeginPopup("##node_picker")) return;
+
+    // Auto-focus search on open
+    if (ImGui::IsWindowAppearing())
+        ImGui::SetKeyboardFocusHere();
+
+    ImGui::SetNextItemWidth(-1);
+    ImGui::InputText("##picker_search", picker_search_, sizeof(picker_search_));
+
+    ImGui::Separator();
+
+    const auto& all_nodes = graph::NodeRegistry::Get().AllNodes();
+
+    // Collect matches (optionally filtered by compatible input pins for from_pin)
+    const graph::Pin* from_pin = from_pin_id ? g.FindPin(from_pin_id) : nullptr;
+
+    for (const auto& def : all_nodes) {
+        // Filter by search text
+        if (picker_search_[0] != '\0') {
+            bool match = false;
+            auto ci = [](const std::string& s, const char* q) {
+                std::string h = s, n(q);
+                std::transform(h.begin(), h.end(), h.begin(),
+                               [](unsigned char c) { return std::tolower(c); });
+                std::transform(n.begin(), n.end(), n.begin(),
+                               [](unsigned char c) { return std::tolower(c); });
+                return h.find(n) != std::string::npos;
+            };
+            if (ci(def.display_name, picker_search_) ||
+                ci(CategoryName(def.category), picker_search_) ||
+                ci(def.source_script, picker_search_))
+                match = true;
+            if (!match) continue;
+        }
+
+        // Pin-drag filter: only show nodes that have at least one compatible input pin
+        if (from_pin) {
+            bool has_compat = false;
+            for (const auto& pd : def.pins) {
+                if (pd.kind == graph::PinKind::Input &&
+                    pd.flow == from_pin->flow &&
+                    (pd.flow == graph::PinFlow::Execution ||
+                     graph::IsCompatible(from_pin->type, pd.type))) {
+                    has_compat = true;
+                    break;
+                }
+            }
+            if (!has_compat) continue;
+        }
+
+        // Category breadcrumb
+        ImGui::TextDisabled("[%s]", CategoryName(def.category));
+        ImGui::SameLine();
+
+        if (ImGui::Selectable(def.display_name.c_str())) {
+            uint64_t id = g.AddNode(def, canvas_pos.x, canvas_pos.y);
+            ne::SetCurrentEditor(ctx_);
+            ne::SetNodePosition(ne::NodeId(id), canvas_pos);
+            ne::SetCurrentEditor(nullptr);
+            positioned_nodes_.insert(id);
+            undo_.Push(std::make_unique<graph::AddNodeCmd>(*g.FindNode(id)));
+
+            // Auto-connect if triggered from pin drag
+            if (from_pin) {
+                graph::ScriptNode* new_node = g.FindNode(id);
+                if (new_node) {
+                    for (auto& p : new_node->pins) {
+                        if (p.kind == graph::PinKind::Input &&
+                            p.flow == from_pin->flow &&
+                            (p.flow == graph::PinFlow::Execution ||
+                             graph::IsCompatible(from_pin->type, p.type))) {
+                            uint64_t cid = g.Connect(from_pin_id, p.id);
+                            if (cid != 0)
+                                undo_.Push(std::make_unique<graph::ConnectCmd>(
+                                    g.connections.back(), std::nullopt));
+                            break;
+                        }
+                    }
+                }
+            }
+
+            project::Project::Get().MarkDirty();
+            ImGui::CloseCurrentPopup();
+        }
+    }
+
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape))
+        ImGui::CloseCurrentPopup();
+
+    ImGui::EndPopup();
+}
+
+// ── Node context menu ─────────────────────────────────────────────────────────
+
+void GraphEditorPanel::RenderNodeContextMenu(graph::ScriptGraph& g) {
+    if (!ImGui::BeginPopup("##node_ctx")) return;
+
+    const bool multi = ne::GetSelectedObjectCount() > 1;
+
+    if (ImGui::MenuItem("Cut"))       { CutSelected(g); ImGui::CloseCurrentPopup(); }
+    if (ImGui::MenuItem("Copy"))      { CopySelected(g); ImGui::CloseCurrentPopup(); }
+    if (ImGui::MenuItem("Duplicate")) { DuplicateSelected(g); ImGui::CloseCurrentPopup(); }
+    ImGui::Separator();
+    if (ImGui::MenuItem("Delete")) {
+        // Delete the right-clicked node (and any selected nodes)
+        auto to_del = GetSelectedNodeIds();
+        if (to_del.empty()) to_del.push_back(ctx_node_id_);
+        std::vector<std::unique_ptr<graph::ICommand>> cmds;
+        for (uint64_t nid : to_del) {
+            graph::ScriptNode* n = g.FindNode(nid);
+            if (!n) continue;
+            std::vector<graph::Connection> removed_conns;
+            for (const auto& p : n->pins)
+                for (const auto* c : g.ConnectionsForPin(p.id))
+                    removed_conns.push_back(*c);
+            graph::ScriptNode snap = *n;
+            g.RemoveNode(nid);
+            positioned_nodes_.erase(nid);
+            cmds.push_back(std::make_unique<graph::RemoveNodeCmd>(std::move(snap),
+                                                                   std::move(removed_conns)));
+        }
+        if (!cmds.empty()) {
+            undo_.Push(std::make_unique<graph::MacroCmd>(std::move(cmds), "Delete"));
+            project::Project::Get().MarkDirty();
+        }
+        ImGui::CloseCurrentPopup();
+    }
+
+    if (multi) {
+        ImGui::Separator();
+        if (ImGui::BeginMenu("Align")) {
+            if (ImGui::MenuItem("Left edges"))           AlignSelected(g, 0);
+            if (ImGui::MenuItem("Right edges"))          AlignSelected(g, 1);
+            if (ImGui::MenuItem("Top edges"))            AlignSelected(g, 2);
+            if (ImGui::MenuItem("Bottom edges"))         AlignSelected(g, 3);
+            if (ImGui::MenuItem("Centre horizontal"))    AlignSelected(g, 4);
+            if (ImGui::MenuItem("Centre vertical"))      AlignSelected(g, 5);
+            if (ImGui::MenuItem("Distribute horizontal"))AlignSelected(g, 6);
+            if (ImGui::MenuItem("Distribute vertical"))  AlignSelected(g, 7);
+            ImGui::EndMenu();
+        }
+    }
+
+    ImGui::EndPopup();
+}
+
+// ── Clipboard helpers ─────────────────────────────────────────────────────────
+
+static std::vector<uint64_t> GetSelectedNodeIds() {
+    int count = ne::GetSelectedObjectCount();
+    std::vector<ne::NodeId> ids(static_cast<size_t>(count));
+    int n = ne::GetSelectedNodes(ids.data(), count);
+    std::vector<uint64_t> result;
+    result.reserve(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) result.push_back(ids[static_cast<size_t>(i)].Get());
+    return result;
+}
+
+void GraphEditorPanel::CopySelected(graph::ScriptGraph& g) {
+    auto sel_ids = GetSelectedNodeIds();
+    if (sel_ids.empty()) return;
+
+    std::unordered_set<uint64_t> sel_set(sel_ids.begin(), sel_ids.end());
+    clipboard_.nodes.clear();
+    clipboard_.internal_connections.clear();
+
+    for (uint64_t nid : sel_ids) {
+        if (const graph::ScriptNode* n = g.FindNode(nid)) {
+            // Sync current canvas position before capturing
+            ne::SetCurrentEditor(ctx_);
+            ImVec2 pos = ne::GetNodePosition(ne::NodeId(nid));
+            ne::SetCurrentEditor(nullptr);
+            graph::ScriptNode snap = *n;
+            snap.pos_x = pos.x;
+            snap.pos_y = pos.y;
+            clipboard_.nodes.push_back(std::move(snap));
+        }
+    }
+    // Only keep connections where both endpoints are in selection
+    for (const auto& conn : g.connections) {
+        uint64_t fn = graph::PinOwnerNodeId(conn.from_pin_id);
+        uint64_t tn = graph::PinOwnerNodeId(conn.to_pin_id);
+        if (sel_set.count(fn) && sel_set.count(tn))
+            clipboard_.internal_connections.push_back(conn);
+    }
+    has_clipboard_ = true;
+    paste_offset_  = 0;
+}
+
+void GraphEditorPanel::CutSelected(graph::ScriptGraph& g) {
+    CopySelected(g);
+
+    auto sel_ids = GetSelectedNodeIds();
+    if (sel_ids.empty()) return;
+
+    std::vector<std::unique_ptr<graph::ICommand>> cmds;
+    for (uint64_t nid : sel_ids) {
+        graph::ScriptNode* n = g.FindNode(nid);
+        if (!n) continue;
+        std::vector<graph::Connection> removed_conns;
+        for (const auto& p : n->pins)
+            for (const auto* c : g.ConnectionsForPin(p.id))
+                removed_conns.push_back(*c);
+        graph::ScriptNode snap = *n;
+        g.RemoveNode(nid);
+        positioned_nodes_.erase(nid);
+        cmds.push_back(std::make_unique<graph::RemoveNodeCmd>(std::move(snap),
+                                                               std::move(removed_conns)));
+    }
+    if (!cmds.empty()) {
+        undo_.Push(std::make_unique<graph::MacroCmd>(std::move(cmds), "Cut"));
+        project::Project::Get().MarkDirty();
+    }
+}
+
+void GraphEditorPanel::PasteClipboard(graph::ScriptGraph& g) {
+    if (!has_clipboard_ || clipboard_.nodes.empty()) return;
+
+    paste_offset_ += 1;
+    float off = paste_offset_ * 40.0f;
+
+    // Map old node IDs → new node IDs
+    std::unordered_map<uint64_t, uint64_t> id_map;
+
+    std::vector<std::unique_ptr<graph::ICommand>> cmds;
+
+    for (const auto& src_node : clipboard_.nodes) {
+        const graph::NodeDefinition* def = graph::NodeRegistry::Get().Find(src_node.type_id);
+        if (!def) continue;
+
+        float nx = src_node.pos_x + off;
+        float ny = src_node.pos_y + off;
+        uint64_t new_id = g.AddNode(*def, nx, ny);
+        id_map[src_node.id] = new_id;
+
+        ne::SetCurrentEditor(ctx_);
+        ne::SetNodePosition(ne::NodeId(new_id), ImVec2(nx, ny));
+        ne::SetCurrentEditor(nullptr);
+        positioned_nodes_.insert(new_id);
+
+        // Copy pin values from source
+        graph::ScriptNode* new_node = g.FindNode(new_id);
+        if (new_node) {
+            for (size_t i = 0; i < new_node->pins.size() && i < src_node.pins.size(); ++i)
+                new_node->pins[i].value = src_node.pins[i].value;
+        }
+
+        cmds.push_back(std::make_unique<graph::AddNodeCmd>(*g.FindNode(new_id)));
+    }
+
+    // Re-connect internal connections with remapped pin IDs
+    for (const auto& conn : clipboard_.internal_connections) {
+        // Compute new pin IDs: pin_id = (node_id << 16) | pin_index
+        uint64_t old_from_node = graph::PinOwnerNodeId(conn.from_pin_id);
+        uint64_t old_to_node   = graph::PinOwnerNodeId(conn.to_pin_id);
+        uint64_t from_pin_idx  = conn.from_pin_id & 0xFFFF;
+        uint64_t to_pin_idx    = conn.to_pin_id   & 0xFFFF;
+
+        auto fi = id_map.find(old_from_node);
+        auto ti = id_map.find(old_to_node);
+        if (fi == id_map.end() || ti == id_map.end()) continue;
+
+        uint64_t new_from_pin = graph::MakePinId(fi->second, static_cast<uint32_t>(from_pin_idx));
+        uint64_t new_to_pin   = graph::MakePinId(ti->second, static_cast<uint32_t>(to_pin_idx));
+
+        if (g.CanConnect(new_from_pin, new_to_pin)) {
+            uint64_t cid = g.Connect(new_from_pin, new_to_pin);
+            if (cid != 0)
+                cmds.push_back(std::make_unique<graph::ConnectCmd>(
+                    g.connections.back(), std::nullopt));
+        }
+    }
+
+    if (!cmds.empty()) {
+        undo_.Push(std::make_unique<graph::MacroCmd>(std::move(cmds), "Paste"));
+        project::Project::Get().MarkDirty();
+    }
+}
+
+void GraphEditorPanel::DuplicateSelected(graph::ScriptGraph& g) {
+    CopySelected(g);
+    PasteClipboard(g);
+}
+
+// ── Alignment ─────────────────────────────────────────────────────────────────
+// mode: 0=left,1=right,2=top,3=bottom,4=centre-h,5=centre-v,6=distrib-h,7=distrib-v
+
+void GraphEditorPanel::AlignSelected(graph::ScriptGraph& g, int mode) {
+    // collect node IDs with their positions
+    auto sel_ids = GetSelectedNodeIds();
+    if (sel_ids.size() < 2) return;
+
+    ne::SetCurrentEditor(ctx_);
+
+    struct NodePos { uint64_t id; float x, y, w, h; };
+    std::vector<NodePos> nps;
+    nps.reserve(sel_ids.size());
+    for (uint64_t nid : sel_ids) {
+        ImVec2 pos  = ne::GetNodePosition(ne::NodeId(nid));
+        ImVec2 size = ne::GetNodeSize(ne::NodeId(nid));
+        nps.push_back({nid, pos.x, pos.y, size.x, size.y});
+    }
+    ne::SetCurrentEditor(nullptr);
+
+    // Compute targets
+    float ref_left   = nps[0].x;
+    float ref_right  = nps[0].x + nps[0].w;
+    float ref_top    = nps[0].y;
+    float ref_bottom = nps[0].y + nps[0].h;
+    for (const auto& np : nps) {
+        ref_left   = std::min(ref_left,   np.x);
+        ref_right  = std::max(ref_right,  np.x + np.w);
+        ref_top    = std::min(ref_top,    np.y);
+        ref_bottom = std::max(ref_bottom, np.y + np.h);
+    }
+
+    // Sort for distribute
+    std::vector<NodePos> sorted_h = nps, sorted_v = nps;
+    std::sort(sorted_h.begin(), sorted_h.end(), [](const NodePos& a, const NodePos& b) { return a.x < b.x; });
+    std::sort(sorted_v.begin(), sorted_v.end(), [](const NodePos& a, const NodePos& b) { return a.y < b.y; });
+
+    std::vector<std::unique_ptr<graph::ICommand>> cmds;
+
+    ne::SetCurrentEditor(ctx_);
+    for (auto& np : nps) {
+        float new_x = np.x, new_y = np.y;
+        switch (mode) {
+        case 0: new_x = ref_left;               break; // left
+        case 1: new_x = ref_right - np.w;       break; // right
+        case 2: new_y = ref_top;                break; // top
+        case 3: new_y = ref_bottom - np.h;      break; // bottom
+        case 4: new_x = (ref_left + ref_right  - np.w) * 0.5f; break; // centre-h
+        case 5: new_y = (ref_top  + ref_bottom - np.h) * 0.5f; break; // centre-v
+        case 6: { // distribute-h
+            float total_w = 0;
+            for (const auto& n2 : nps) total_w += n2.w;
+            float gap = (ref_right - ref_left - total_w) / float(nps.size() - 1);
+            float cx = ref_left;
+            for (size_t i = 0; i < sorted_h.size(); ++i) {
+                if (sorted_h[i].id == np.id) { new_x = cx; break; }
+                cx += sorted_h[i].w + gap;
+            }
+            break;
+        }
+        case 7: { // distribute-v
+            float total_h = 0;
+            for (const auto& n2 : nps) total_h += n2.h;
+            float gap = (ref_bottom - ref_top - total_h) / float(nps.size() - 1);
+            float cy = ref_top;
+            for (size_t i = 0; i < sorted_v.size(); ++i) {
+                if (sorted_v[i].id == np.id) { new_y = cy; break; }
+                cy += sorted_v[i].h + gap;
+            }
+            break;
+        }
+        }
+        if (new_x != np.x || new_y != np.y) {
+            cmds.push_back(std::make_unique<graph::MoveNodeCmd>(np.id,
+                np.x, np.y, new_x, new_y));
+            ne::SetNodePosition(ne::NodeId(np.id), ImVec2(new_x, new_y));
+        }
+    }
+    ne::SetCurrentEditor(nullptr);
+
+    if (!cmds.empty()) {
+        undo_.Push(std::make_unique<graph::MacroCmd>(std::move(cmds), "Align"));
+        project::Project::Get().MarkDirty();
+    }
 }
 
 } // namespace ui

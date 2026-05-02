@@ -42,6 +42,13 @@ void Settings::Load(const std::string& config_path) {
             window_w = w.value("w", 1280);
             window_h = w.value("h", 720);
         }
+
+        if (j.contains("ui") && j["ui"].contains("palette_state")) {
+            const auto& ps = j["ui"]["palette_state"];
+            for (auto it = ps.begin(); it != ps.end(); ++it)
+                if (it.value().is_boolean())
+                    palette_category_expanded[it.key()] = it.value().get<bool>();
+        }
     } catch (const std::exception& e) {
         LOG_WARN(std::string("Settings::Load failed: ") + e.what());
     }
@@ -63,6 +70,13 @@ void Settings::Save(const std::string& config_path) const {
         {"x", window_x}, {"y", window_y},
         {"w", window_w}, {"h", window_h}
     };
+
+    {
+        json ps = json::object();
+        for (const auto& kv : palette_category_expanded)
+            ps[kv.first] = kv.second;
+        j["ui"]["palette_state"] = ps;
+    }
 
     const std::string tmp_path = config_path + ".tmp";
     try {

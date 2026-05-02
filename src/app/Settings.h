@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -31,6 +32,9 @@ public:
     int  window_y = -1;
     int  window_w = 1280;
     int  window_h = 720;
+
+    // UI state
+    std::map<std::string, bool> palette_category_expanded; // category name → expanded
 
     // Load from config_path. Missing keys take defaults. No-op if file absent.
     void Load(const std::string& config_path);

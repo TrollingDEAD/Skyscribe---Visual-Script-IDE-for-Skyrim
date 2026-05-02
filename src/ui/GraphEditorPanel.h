@@ -5,10 +5,18 @@
 
 #include <imgui.h>
 #include <imgui_node_editor.h>
+#include <optional>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 namespace ui {
+
+// Clipboard payload for copy/paste operations.
+struct ClipboardPayload {
+    std::vector<graph::ScriptNode>   nodes;
+    std::vector<graph::Connection>   internal_connections;
+};
 
 class GraphEditorPanel {
 public:
@@ -29,6 +37,15 @@ private:
     void HandleDelete(graph::ScriptGraph& g);
     void HandleKeyboardShortcuts(graph::ScriptGraph& g);
     void AcceptPaletteDrop(graph::ScriptGraph& g);
+    void RenderNodePicker(graph::ScriptGraph& g, ImVec2 canvas_pos, uint64_t from_pin_id = 0);
+    void RenderNodeContextMenu(graph::ScriptGraph& g);
+
+    // Copy/paste helpers
+    void CopySelected(graph::ScriptGraph& g);
+    void PasteClipboard(graph::ScriptGraph& g);
+    void CutSelected(graph::ScriptGraph& g);
+    void DuplicateSelected(graph::ScriptGraph& g);
+    void AlignSelected(graph::ScriptGraph& g, int mode); // 0=left,1=right,2=top,3=bottom,4=ch,5=cv,6=dh,7=dv
 
     ax::NodeEditor::EditorContext* ctx_    = nullptr;
     std::string                    last_script_name_; // detect active graph switch
@@ -43,6 +60,20 @@ private:
     // Script identity bar editing buffers
     char name_buf_[129]    = {};
     char extends_buf_[129] = {};
+
+    // Node picker state
+    bool        picker_open_         = false;
+    ImVec2      picker_canvas_pos_   = {};
+    uint64_t    picker_from_pin_id_  = 0; // 0 = not pin-drag triggered
+    char        picker_search_[256]  = {};
+
+    // Node context menu
+    uint64_t    ctx_node_id_         = 0; // node under right-click
+
+    // Clipboard
+    ClipboardPayload clipboard_;
+    bool             has_clipboard_  = false;
+    int              paste_offset_   = 0; // incremented on each paste
 };
 
 } // namespace ui

@@ -1,4 +1,5 @@
 #include "ui/ToolPalettePanel.h"
+#include "app/Settings.h"
 #include "graph/NodeRegistry.h"
 #include "graph/BuiltinNodes.h"
 
@@ -106,6 +107,7 @@ void ToolPalettePanel::Render() {
     }
 
     // ── Categorised tree view ─────────────────────────────────────────────────
+    auto& palette_state = app::Settings::Get().palette_category_expanded;
     graph::NodeCategory last_cat = static_cast<graph::NodeCategory>(-1);
     bool last_open = false;
 
@@ -114,10 +116,19 @@ void ToolPalettePanel::Render() {
             if (last_open) { ImGui::TreePop(); last_open = false; }
             last_cat = def.category;
 
+            const char* cat_name = CategoryName(def.category);
+            // Read persisted state; default to open
+            bool want_open = true;
+            auto it = palette_state.find(cat_name);
+            if (it != palette_state.end()) want_open = it->second;
+
+            ImGui::SetNextTreeNodeOpen(want_open, ImGuiCond_Once);
             ImGui::PushStyleColor(ImGuiCol_Text, CategoryHeaderColor(def.category));
-            last_open = ImGui::TreeNodeEx(CategoryName(def.category),
-                                          ImGuiTreeNodeFlags_DefaultOpen);
+            last_open = ImGui::TreeNodeEx(cat_name, ImGuiTreeNodeFlags_None);
             ImGui::PopStyleColor();
+
+            // Persist toggle in-memory (flushed to disk when Settings::Save() is called)
+            palette_state[cat_name] = last_open;
         }
         if (last_open) {
             ImGui::Indent(8.0f);
