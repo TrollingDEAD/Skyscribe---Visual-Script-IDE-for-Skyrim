@@ -332,14 +332,20 @@ void MainWindow::BuildDefaultLayout(ImGuiID dockspace_id) {
                                 &dock_output, &dock_top);
 
     ImGuiID dock_remaining = dock_top;
-    ImGuiID dock_palette, dock_preview, dock_graph;
+    ImGuiID dock_left, dock_preview, dock_graph;
 
     ImGui::DockBuilderSplitNode(dock_remaining, ImGuiDir_Left, 0.20f,
-                                &dock_palette, &dock_remaining);
+                                &dock_left, &dock_remaining);
     ImGui::DockBuilderSplitNode(dock_remaining, ImGuiDir_Right, 0.3125f,
                                 &dock_preview, &dock_graph);
 
+    // Split left column: palette (top 50%) + project (bottom 50%)
+    ImGuiID dock_palette, dock_project;
+    ImGui::DockBuilderSplitNode(dock_left, ImGuiDir_Down, 0.50f,
+                                &dock_project, &dock_palette);
+
     ImGui::DockBuilderDockWindow("Tool Palette",  dock_palette);
+    ImGui::DockBuilderDockWindow("Project",       dock_project);
     ImGui::DockBuilderDockWindow("Graph Editor",  dock_graph);
     ImGui::DockBuilderDockWindow("Preview",       dock_preview);
     ImGui::DockBuilderDockWindow("Output",        dock_output);
