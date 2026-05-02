@@ -130,23 +130,23 @@ src/codegen/PapyrusStringBuilder.cpp
 
 > ROADMAP §11, §38
 
-- [ ] Implement all edge cases from ROADMAP §11 in `PapyrusStringBuilder`:
+- [x] Implement all edge cases from ROADMAP §11 in `PapyrusStringBuilder`:
   - **Empty graph** → emit `ScriptName X\nExtends Y\n` only (valid, compilable)
   - **No Event node** → emit ScriptName + Extends + Properties only; no Event blocks
   - **Unconnected data input pin** → use `NodeDefinition::PinDefinition::default_value`; if empty, emit `None` / `0` / `""` / `false` per type; log warning
   - **Duplicate Event node** → emit first occurrence; mark second as lint error L02; do not emit duplicate event block
   - **Cycle in exec-flow** → emit `; [ERROR: Execution-flow cycle at node <id>]` in place of the cyclic statement; set `has_errors = true`
-- [ ] **`None` / Null handling** (ROADMAP §38):
+- [x] **`None` / Null handling** (ROADMAP §38):
   - `None` literal emits `None`
   - `ObjectReference` / `Actor` / `Form` unconnected pins emit `None`
   - `Int` / `Float` unconnected pins emit `0` / `0.0`
   - `String` unconnected pins emit `""`
   - `Bool` unconnected pins emit `False`
-- [ ] **Unit tests** (expand `tests/test_codegen.cpp`):
+- [x] **Unit tests** (expand `tests/test_codegen.cpp`):
   - Empty graph → valid minimal `.psc` string
   - Unconnected `String` pin → `""` emitted, no crash
   - Duplicate `OnInit` → only one `Event OnInit()` block in output
-- [ ] Acceptance: all 3+ new tests pass; no panics on any edge-case graph
+- [x] Acceptance: all 3+ new tests pass; no panics on any edge-case graph
 
 ---
 

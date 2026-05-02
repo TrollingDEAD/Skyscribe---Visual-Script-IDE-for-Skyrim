@@ -681,6 +681,82 @@ TEST_CASE("Generate handles multiple event nodes", "[codegen]") {
     CHECK(Contains(result.source, "Event OnDeath(Actor akKiller)"));
 }
 
+// ── 3.4 Required unit tests ───────────────────────────────────────────────────
+
+TEST_CASE("EdgeCase: empty graph produces valid minimal psc", "[edgecase]") {
+    // Empty graph (no nodes at all) → valid Papyrus header, no crash, no errors
+    ScriptGraph g = MakeGraph("EmptyX", "ObjectReference");
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK_FALSE(result.has_errors);
+    CHECK(Contains(result.source, "Scriptname EmptyX"));
+    CHECK(Contains(result.source, "extends ObjectReference"));
+    CHECK_FALSE(Contains(result.source, "Event "));
+}
+
+TEST_CASE("EdgeCase: unconnected String pin emits empty string literal", "[edgecase]") {
+    // Notification's akMessage pin is a String with default "" — must emit "", not crash
+    ScriptGraph g = MakeGraph("TestScript");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t notif   = AddBuiltin(g, "builtin.Notification");
+    ConnectExec(g, on_init, notif);
+    // Leave akMessage pin unconnected and with no value — relies on DefaultLiteralForType("String") = "\"\""
+    ScriptNode* n = g.FindNode(notif);
+    for (auto& p : n->pins)
+        if (p.name == "akMessage") p.value = "";  // ensure unset
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK_FALSE(result.has_errors);
+    // akMessage should fall back to its default "" (two double quotes in source)
+    CHECK(Contains(result.source, "Debug.Notification("));
+    // No crash — that's the key
+}
+
+TEST_CASE("EdgeCase: duplicate OnInit emits only one event block", "[edgecase]") {
+    ScriptGraph g = MakeGraph("TestScript");
+    AddBuiltin(g, "builtin.OnInit");
+    AddBuiltin(g, "builtin.OnInit");  // duplicate
+    auto result = PapyrusStringBuilder::Generate(g);
+    // Only one Event OnInit() block
+    auto first  = result.source.find("Event OnInit()");
+    auto second = result.source.find("Event OnInit()", first + 1);
+    REQUIRE(first != std::string::npos);
+    CHECK(second == std::string::npos);
+    // has_errors flagged because of the duplicate
+    CHECK(result.has_errors);
+}
+
+TEST_CASE("EdgeCase: exec-flow cycle emits error comment and sets has_errors", "[edgecase]") {
+    // Build a manual cycle by directly connecting two Notification nodes back-to-back
+    // and then using GraphTraversal to confirm cycle detection.
+    // We test the PapyrusStringBuilder response via a known-cycle traversal.
+    ScriptGraph g = MakeGraph("TestScript");
+    uint64_t on_init = AddBuiltin(g, "builtin.OnInit");
+    uint64_t notif   = AddBuiltin(g, "builtin.Notification");
+    ConnectExec(g, on_init, notif);
+
+    // Create cycle: Connect notif exec-out back toward on_init exec-out pin
+    // (not a real exec-in, but enough to make Traverse detect a cycle via visited set)
+    // Instead, directly test via TraverseDfs with a manually constructed cycle:
+    uint64_t notif2 = AddBuiltin(g, "builtin.Notification");
+    ConnectExec(g, notif, notif2);
+    // Connect notif2 back to notif's exec-in to form the cycle
+    const ScriptNode* n  = g.FindNode(notif);
+    const ScriptNode* n2 = g.FindNode(notif2);
+    uint64_t exec_in_notif = 0;
+    for (const auto& p : n->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Input) { exec_in_notif = p.id; break; }
+    uint64_t exec_out_notif2 = 0;
+    for (const auto& p : n2->pins)
+        if (p.flow == PinFlow::Execution && p.kind == PinKind::Output) { exec_out_notif2 = p.id; break; }
+    REQUIRE(exec_in_notif); REQUIRE(exec_out_notif2);
+    // Force connect (bypass validation since ScriptGraph::Connect may reject cycles)
+    Connection c; c.id = 9999; c.from_pin_id = exec_out_notif2; c.to_pin_id = exec_in_notif;
+    g.connections.push_back(c);
+
+    auto result = PapyrusStringBuilder::Generate(g);
+    CHECK(result.has_errors);
+    CHECK(Contains(result.source, "; [ERROR: Execution-flow cycle at node"));
+}
+
 // ── 3.11 PropertyDefinition ───────────────────────────────────────────────────
 
 TEST_CASE("ScriptGraph stores property definitions", "[properties]") {

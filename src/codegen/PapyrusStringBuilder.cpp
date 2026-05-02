@@ -65,6 +65,8 @@ struct EmitContext {
     // Pre-computed: number of data-input pins connected to each output pin.
     // Used to decide whether to hoist math/logic results to a temp var (≥2) or inline (1).
     std::unordered_map<uint64_t, int> pin_consumer_count;
+    // Set true if any cycle or other error is encountered during emission.
+    bool has_errors = false;
 };
 
 // Forward declarations
@@ -229,8 +231,13 @@ static void EmitBranch(const graph::ScriptGraph& g, uint64_t exec_out_pin_id,
                         const std::string& indent_unit,
                         EmitContext& ctx,
                         std::ostream& out) {
-    auto result = GraphTraversal::Traverse(g, exec_out_pin_id);
-    for (uint64_t nid : result.node_ids)
+    auto traversal = GraphTraversal::Traverse(g, exec_out_pin_id);
+    if (traversal.has_cycle) {
+        ctx.has_errors = true;
+        for (const auto& [from_id, to_id] : traversal.cycle_edges)
+            out << indent << "; [ERROR: Execution-flow cycle at node " << to_id << "]\n";
+    }
+    for (uint64_t nid : traversal.node_ids)
         EmitStatement(g, nid, indent, indent_unit, ctx, out);
 }
 
@@ -417,12 +424,12 @@ static std::string EventHeader(const graph::ScriptNode& event_node,
 
 // ─── Event body ───────────────────────────────────────────────────────────────
 
-static void EmitEventBody(const graph::ScriptGraph& g,
+static bool EmitEventBody(const graph::ScriptGraph& g,
                            uint64_t event_node_id,
                            const std::string& indent_unit,
                            std::ostream& out) {
     const graph::ScriptNode* event_node = g.FindNode(event_node_id);
-    if (!event_node) return;
+    if (!event_node) return false;
 
     // Find the exec-out pin of the event node
     uint64_t exec_pin = 0;
@@ -469,6 +476,7 @@ static void EmitEventBody(const graph::ScriptGraph& g,
         out << indent_unit << decl << "\n";
 
     out << body_out.str();
+    return ctx.has_errors;
 }
 
 // ─── Property emission ────────────────────────────────────────────────────────
@@ -568,8 +576,23 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
     // ── Events ────────────────────────────────────────────────────────────────
     auto event_ids = GraphTraversal::FindEventNodes(g);
 
-    if (event_ids.empty() && g.nodes.empty()) {
-        // Empty graph — that's valid, just no events
+    // Deduplicate by type_id: emit only the first occurrence of each event type.
+    // Subsequent duplicates are a lint error (L02) — mark has_errors and skip.
+    {
+        std::unordered_set<std::string> seen_event_types;
+        std::vector<uint64_t> unique_events;
+        for (uint64_t eid : event_ids) {
+            const graph::ScriptNode* en = g.FindNode(eid);
+            if (!en) continue;
+            if (seen_event_types.count(en->type_id)) {
+                result.has_errors = true;
+                result.error_message += "; Duplicate event node " + en->type_id;
+            } else {
+                seen_event_types.insert(en->type_id);
+                unique_events.push_back(eid);
+            }
+        }
+        event_ids = std::move(unique_events);
     }
 
     for (uint64_t eid : event_ids) {
@@ -579,7 +602,8 @@ PapyrusStringBuilder::Result PapyrusStringBuilder::Generate(const graph::ScriptG
         if (!def) continue;
 
         out << EventHeader(*en, *def) << "\n";
-        EmitEventBody(g, eid, indent_unit, out);
+        if (EmitEventBody(g, eid, indent_unit, out))
+            result.has_errors = true;
         out << "EndEvent\n\n";
     }
 
