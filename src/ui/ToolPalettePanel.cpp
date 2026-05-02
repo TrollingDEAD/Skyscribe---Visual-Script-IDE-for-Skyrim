@@ -122,7 +122,7 @@ void ToolPalettePanel::Render() {
             auto it = palette_state.find(cat_name);
             if (it != palette_state.end()) want_open = it->second;
 
-            ImGui::SetNextTreeNodeOpen(want_open, ImGuiCond_Once);
+            ImGui::SetNextItemOpen(want_open, ImGuiCond_Once);
             ImGui::PushStyleColor(ImGuiCol_Text, CategoryHeaderColor(def.category));
             last_open = ImGui::TreeNodeEx(cat_name, ImGuiTreeNodeFlags_None);
             ImGui::PopStyleColor();

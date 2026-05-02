@@ -628,6 +628,18 @@ void GraphEditorPanel::RenderNodePicker(graph::ScriptGraph& g, ImVec2 canvas_pos
     ImGui::EndPopup();
 }
 
+// ── Selection helper (forward-declared free function) ───────────────────────
+
+static std::vector<uint64_t> GetSelectedNodeIds() {
+    int count = ne::GetSelectedObjectCount();
+    std::vector<ne::NodeId> ids(static_cast<size_t>(count));
+    int n = ne::GetSelectedNodes(ids.data(), count);
+    std::vector<uint64_t> result;
+    result.reserve(static_cast<size_t>(n));
+    for (int i = 0; i < n; ++i) result.push_back(ids[static_cast<size_t>(i)].Get());
+    return result;
+}
+
 // ── Node context menu ─────────────────────────────────────────────────────────
 
 void GraphEditorPanel::RenderNodeContextMenu(graph::ScriptGraph& g) {
@@ -683,16 +695,6 @@ void GraphEditorPanel::RenderNodeContextMenu(graph::ScriptGraph& g) {
 }
 
 // ── Clipboard helpers ─────────────────────────────────────────────────────────
-
-static std::vector<uint64_t> GetSelectedNodeIds() {
-    int count = ne::GetSelectedObjectCount();
-    std::vector<ne::NodeId> ids(static_cast<size_t>(count));
-    int n = ne::GetSelectedNodes(ids.data(), count);
-    std::vector<uint64_t> result;
-    result.reserve(static_cast<size_t>(n));
-    for (int i = 0; i < n; ++i) result.push_back(ids[static_cast<size_t>(i)].Get());
-    return result;
-}
 
 void GraphEditorPanel::CopySelected(graph::ScriptGraph& g) {
     auto sel_ids = GetSelectedNodeIds();

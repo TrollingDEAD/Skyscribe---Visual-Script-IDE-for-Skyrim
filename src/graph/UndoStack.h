@@ -87,6 +87,8 @@ struct MacroCmd : ICommand {
     std::vector<std::unique_ptr<ICommand>> cmds_;
     std::string                            desc_;
     explicit MacroCmd(std::string d) : desc_(std::move(d)) {}
+    MacroCmd(std::vector<std::unique_ptr<ICommand>> cmds, std::string d)
+        : cmds_(std::move(cmds)), desc_(std::move(d)) {}
     void Add(std::unique_ptr<ICommand> c) { cmds_.push_back(std::move(c)); }
     void Execute(ScriptGraph& g) override;
     void Undo(ScriptGraph& g)    override;
